@@ -367,7 +367,7 @@ end
 local speedBoostOriginal = getgenv().__MinhoRageSpeedBoost or nil
 getgenv().__MinhoRageSpeedBoost = speedBoostOriginal
 
--- ▼ 추가: 고급 필드 → Config 키 매핑
+-- 고급 필드 → Config 키 매핑
 local ADVANCED_FIELD_MAP = {
     DashCooldown        = "Dash",
     HeavyAttackCooldown = "HeavyAttack",
@@ -386,7 +386,7 @@ local function applySpeedBoost()
         "AttackCooldown", "AttackDelay", "SwingCooldown", "MeleeCooldown",
         "Cooldown", "RecoveryTime", "ResetTime", "SwingTime", "SwingDelay",
         "ComboCooldown", "FireCooldown", "ReloadLength",
-        -- ▼ 추가: 고급 쿨다운 필드들
+        -- 고급 쿨다운 필드
         "DashCooldown", "HeavyAttackCooldown", "SpinCooldown", "DeflectCooldown", "QuickShotCooldown",
     }
     local mult = Config.SpeedBoostMult
@@ -398,7 +398,6 @@ local function applySpeedBoost()
                 if data[f] ~= nil then
                     orig[f] = data[f]
                     if type(data[f]) == "number" then
-                        -- ▼ 추가: 고급 감소율 우선, 아니면 SpeedBoostMult
                         local advKey = ADVANCED_FIELD_MAP[f]
                         if adv.Enabled and advKey then
                             local pct = math.clamp(adv[advKey] or 0, 0, 100)
@@ -408,7 +407,6 @@ local function applySpeedBoost()
                         else
                             data[f] = data[f] * mult
                         end
-                        -- ▲
                     end
                 end
             end
@@ -432,6 +430,8 @@ local function removeSpeedBoost()
     speedBoostOriginal = nil
     getgenv().__MinhoRageSpeedBoost = nil
 end
+RageModule.applySpeedBoost = applySpeedBoost
+RageModule.removeSpeedBoost = removeSpeedBoost
 
 local function doFire(part)
     local fighter = getFighter()
@@ -871,9 +871,9 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
     end
 end)
 
-RageModule.removeSpeedBoost = removeSpeedBoost
-RageModule.applySpeedBoost = applySpeedBoost
-
+-- ============================================================
+-- UI (기존 전부 유지 + Speed Control에 Depbox 방식 추가)
+-- ============================================================
 local RageBox   = Main:AddGroupbox({ Name = "Ragebot", Side = 1 })
 local WCBox     = Main:AddGroupbox({ Name = "Weapon Config", Side = 1 })
 local WBox      = Main:AddGroupbox({ Name = "Weapon", Side = 1 })
@@ -968,6 +968,9 @@ Underground_Toggle:AddKeyPicker("UndergroundKey", {
     Text = "Underground", Default = nil, Mode = "Toggle", SyncToggleState = true,
 })
 
+-- ============================================================
+-- Speed Control - 기존 버튼들
+-- ============================================================
 local RecoilBox = SCBox:AddCheckbox("Recoil", {
     Text = "Recoil", Default = false,
     Callback = function(Value)
@@ -1027,29 +1030,29 @@ local MeleeCooldownBox = SCBox:AddCheckbox("MeleeCooldownEnabled", {
 })
 
 -- ============================================================
--- ▼ 추가: 고급 공속 설정
+-- ▼ 추가: 고급 공속 (버튼 → 숨겨진 슬라이더 자동 표시)
 -- ============================================================
 
--- 슬라이더 홀더를 안전하게 숨기기 위한 유틸
-local function getSliderHolder(sliderObj)
-    if not sliderObj then return nil end
-    local candidates = {
-        sliderObj.Holder,
-        sliderObj.Object and sliderObj.Object.Holder,
-        sliderObj.Element and sliderObj.Element.Holder,
-        sliderObj.Base,
-        sliderObj.Frame,
-    }
-    for _, c in ipairs(candidates) do
-        if c and typeof(c) == "Instance" then return c end
-    end
-    return nil
-end
+-- "버튼" 역할 체크박스
+local AdvancedCooldownToggle = SCBox:AddCheckbox("AdvancedCooldownEnabled", {
+    Text = "고급 공속 (Advanced)",
+    Default = false,
+    Callback = function(Value)
+        Config.AdvancedCooldown.Enabled = Value
+        -- 켜지거나 꺼지면 즉시 재적용
+        if Config.Enabled then
+            removeSpeedBoost()
+            applySpeedBoost()
+        end
+    end,
+})
 
-local AdvancedSliders = {}
+-- 숨겨진 슬라이더들 담을 DependencyBox
+-- (토글이 켜져야만 이 박스가 자동으로 나타남)
+local AdvancedCooldownBox = SCBox:AddDependencyBox()
 
 local function AddAdvancedSlider(id, text, configKey)
-    local slider = SCBox:AddSlider("Adv_" .. id, {
+    return AdvancedCooldownBox:AddSlider(id, {
         Text = text,
         Default = 15,
         Min = 0,
@@ -1058,44 +1061,21 @@ local function AddAdvancedSlider(id, text, configKey)
         Suffix = "%",
         Callback = function(v)
             Config.AdvancedCooldown[configKey] = v
-            -- 스크립트가 켜져 있으면 즉시 반영
             if Config.AdvancedCooldown.Enabled and Config.Enabled then
                 removeSpeedBoost()
                 applySpeedBoost()
             end
         end,
     })
-    table.insert(AdvancedSliders, slider)
-    -- 처음엔 숨김
-    local holder = getSliderHolder(slider)
-    if holder then holder.Visible = false end
-    return slider
 end
 
-local AdvancedToggle = SCBox:AddCheckbox("AdvancedCooldownEnabled", {
-    Text = "고급 공속 (Advanced)",
-    Default = false,
-    Callback = function(Value)
-        Config.AdvancedCooldown.Enabled = Value
-        -- 슬라이더 표시/숨김
-        for _, slider in ipairs(AdvancedSliders) do
-            local holder = getSliderHolder(slider)
-            if holder then holder.Visible = Value end
-        end
-        -- 즉시 재적용
-        if Config.Enabled then
-            removeSpeedBoost()
-            applySpeedBoost()
-        end
-    end,
-})
+AddAdvancedSlider("Adv_Dash",        "낫 대시 감소율",     "Dash")
+AddAdvancedSlider("Adv_HeavyAttack", "강공격 감소율",      "HeavyAttack")
+AddAdvancedSlider("Adv_SpinAttack",  "회전 공격 감소율",    "SpinAttack")
+AddAdvancedSlider("Adv_Deflect",     "튕겨내기 감소율",    "Deflect")
+AddAdvancedSlider("Adv_QuickShot",   "퀵샷 감소율",       "QuickShot")
 
--- ▼ 슬라이더 5개 (토글 OFF 상태에선 숨김)
-AddAdvancedSlider("Dash",        "낫 대시 감소율",     "Dash")
-AddAdvancedSlider("HeavyAttack", "강공격 감소율",      "HeavyAttack")
-AddAdvancedSlider("SpinAttack",  "회전 공격 감소율",    "SpinAttack")
-AddAdvancedSlider("Deflect",     "튕겨내기 감소율",    "Deflect")
-AddAdvancedSlider("QuickShot",   "퀵샷 감소율",       "QuickShot")
--- ▲ 추가 끝
+-- ▼▼ 이 한 줄이 전부: 토글이 true일 때만 박스가 표시됨 ▼▼
+AdvancedCooldownBox:SetupDependencies({ { Toggles.AdvancedCooldownEnabled, true } })
 
 return true
