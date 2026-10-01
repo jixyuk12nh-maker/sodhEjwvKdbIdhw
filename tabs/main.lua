@@ -370,64 +370,19 @@ local speedBoostOriginal = getgenv().__MinhoRageSpeedBoost or nil
 getgenv().__MinhoRageSpeedBoost = speedBoostOriginal
 
 -- ============================================================
--- No Recoil (저장소)
--- ============================================================
-local NoRecoilOriginals = getgenv().__MinhoNoRecoilOriginals or {}
-getgenv().__MinhoNoRecoilOriginals = NoRecoilOriginals
-
-local function applyNoRecoil()
-    local ok, lib = pcall(function() return require(ReplicatedStorage.Modules.ItemLibrary) end)
-    if not ok or not lib or type(lib.Items) ~= "table" then return end
-
-    for name, data in pairs(lib.Items) do
-        if type(data) == "table" and type(data.ShootRecoil) == "number" then
-            if NoRecoilOriginals[data] == nil then
-                NoRecoilOriginals[data] = data.ShootRecoil
-            end
-            data.ShootRecoil = 0
-        end
-    end
-
-    -- 파이터의 실제 아이템 인스턴스도
-    local fighter = getFighter()
-    if fighter and type(fighter.Items) == "table" then
-        for _, item in pairs(fighter.Items) do
-            local info = itemField(item, "Info")
-            if type(info) == "table" and type(info.ShootRecoil) == "number" then
-                if NoRecoilOriginals[info] == nil then
-                    NoRecoilOriginals[info] = info.ShootRecoil
-                end
-                info.ShootRecoil = 0
-            end
-        end
-    end
-end
-
-local function revertNoRecoil()
-    for data, orig in pairs(NoRecoilOriginals) do
-        if type(data) == "table" then
-            pcall(function() data.ShootRecoil = orig end)
-        end
-    end
-    NoRecoilOriginals = {}
-    getgenv().__MinhoNoRecoilOriginals = NoRecoilOriginals
-end
-
-RageModule.applyNoRecoil = applyNoRecoil
-RageModule.revertNoRecoil = revertNoRecoil
-
--- ============================================================
 -- Special Skill Cooldowns
+-- Slider 75 = original, 0 = instant, 100 = slower
+-- Per-item original values (fixes cross-weapon override bug)
 -- ============================================================
 local SPECIAL_BASE = 75
 
 local SpecialCooldownOriginals = getgenv().__MinhoSpecialCooldownOriginals or {
-    DashCooldown        = nil,
-    SpinCooldown        = nil,
-    DeflectCooldown     = nil,
-    HeavyAttackCooldown = nil,
-    AttackCooldown      = nil,
-    ShootCooldown       = nil,
+    DashCooldown        = {},
+    SpinCooldown        = {},
+    DeflectCooldown     = {},
+    HeavyAttackCooldown = {},
+    AttackCooldown      = {},
+    ShootCooldown       = {},
 }
 getgenv().__MinhoSpecialCooldownOriginals = SpecialCooldownOriginals
 
@@ -458,93 +413,108 @@ local function applySpecialCooldowns()
     local meleeOn   = safeToggle("MeleeCooldownEnabled")
     local meleeVal  = safeOption("MeleeCooldownSlider", SPECIAL_BASE)
 
+    -- 안전 하한값 (초당 50발)
+    local GUN_MIN = 0.02
+    local MELEE_MIN = 0.02
+
     for _, data in pairs(lib.Items) do
         if type(data) == 'table' then
+            -- Scythe Dash
             if type(data.DashCooldown) == 'number' then
-                if SpecialCooldownOriginals.DashCooldown == nil then
-                    SpecialCooldownOriginals.DashCooldown = data.DashCooldown
+                if SpecialCooldownOriginals.DashCooldown[data] == nil then
+                    SpecialCooldownOriginals.DashCooldown[data] = data.DashCooldown
                 end
                 if scytheOn then
-                    data.DashCooldown = math.max(0.001, SpecialCooldownOriginals.DashCooldown * (scytheVal / SPECIAL_BASE))
+                    data.DashCooldown = math.max(0.001, SpecialCooldownOriginals.DashCooldown[data] * (scytheVal / SPECIAL_BASE))
                 else
-                    data.DashCooldown = SpecialCooldownOriginals.DashCooldown
+                    data.DashCooldown = SpecialCooldownOriginals.DashCooldown[data]
                 end
             end
+            -- Battle Axe Spin
             if type(data.SpinCooldown) == 'number' then
-                if SpecialCooldownOriginals.SpinCooldown == nil then
-                    SpecialCooldownOriginals.SpinCooldown = data.SpinCooldown
+                if SpecialCooldownOriginals.SpinCooldown[data] == nil then
+                    SpecialCooldownOriginals.SpinCooldown[data] = data.SpinCooldown
                 end
                 if axeOn then
-                    data.SpinCooldown = math.max(0.001, SpecialCooldownOriginals.SpinCooldown * (axeVal / SPECIAL_BASE))
+                    data.SpinCooldown = math.max(0.001, SpecialCooldownOriginals.SpinCooldown[data] * (axeVal / SPECIAL_BASE))
                 else
-                    data.SpinCooldown = SpecialCooldownOriginals.SpinCooldown
+                    data.SpinCooldown = SpecialCooldownOriginals.SpinCooldown[data]
                 end
             end
+            -- Katana Deflect
             if type(data.DeflectCooldown) == 'number' then
-                if SpecialCooldownOriginals.DeflectCooldown == nil then
-                    SpecialCooldownOriginals.DeflectCooldown = data.DeflectCooldown
+                if SpecialCooldownOriginals.DeflectCooldown[data] == nil then
+                    SpecialCooldownOriginals.DeflectCooldown[data] = data.DeflectCooldown
                 end
                 if katanaOn then
-                    data.DeflectCooldown = math.max(0.001, SpecialCooldownOriginals.DeflectCooldown * (katanaVal / SPECIAL_BASE))
+                    data.DeflectCooldown = math.max(0.001, SpecialCooldownOriginals.DeflectCooldown[data] * (katanaVal / SPECIAL_BASE))
                 else
-                    data.DeflectCooldown = SpecialCooldownOriginals.DeflectCooldown
+                    data.DeflectCooldown = SpecialCooldownOriginals.DeflectCooldown[data]
                 end
             end
+            -- Knife Heavy
             if type(data.HeavyAttackCooldown) == 'number' then
-                if SpecialCooldownOriginals.HeavyAttackCooldown == nil then
-                    SpecialCooldownOriginals.HeavyAttackCooldown = data.HeavyAttackCooldown
+                if SpecialCooldownOriginals.HeavyAttackCooldown[data] == nil then
+                    SpecialCooldownOriginals.HeavyAttackCooldown[data] = data.HeavyAttackCooldown
                 end
                 if knifeOn then
-                    data.HeavyAttackCooldown = math.max(0.001, SpecialCooldownOriginals.HeavyAttackCooldown * (knifeVal / SPECIAL_BASE))
+                    data.HeavyAttackCooldown = math.max(0.001, SpecialCooldownOriginals.HeavyAttackCooldown[data] * (knifeVal / SPECIAL_BASE))
                 else
-                    data.HeavyAttackCooldown = SpecialCooldownOriginals.HeavyAttackCooldown
+                    data.HeavyAttackCooldown = SpecialCooldownOriginals.HeavyAttackCooldown[data]
                 end
             end
+            -- Gun Fire Rate (연사 안전 하한 적용)
             if type(data.ShootCooldown) == 'number' then
-                if SpecialCooldownOriginals.ShootCooldown == nil then
-                    SpecialCooldownOriginals.ShootCooldown = data.ShootCooldown
+                if SpecialCooldownOriginals.ShootCooldown[data] == nil then
+                    SpecialCooldownOriginals.ShootCooldown[data] = data.ShootCooldown
                 end
                 if gunOn then
-                    data.ShootCooldown = math.max(0.001, SpecialCooldownOriginals.ShootCooldown * (gunVal / SPECIAL_BASE))
+                    local newVal = SpecialCooldownOriginals.ShootCooldown[data] * (gunVal / SPECIAL_BASE)
+                    data.ShootCooldown = math.max(GUN_MIN, newVal)
                 else
-                    data.ShootCooldown = SpecialCooldownOriginals.ShootCooldown
+                    data.ShootCooldown = SpecialCooldownOriginals.ShootCooldown[data]
                 end
             end
+            -- Melee Attack Speed (근접 안전 하한 적용)
             if type(data.AttackCooldown) == 'number' then
-                if SpecialCooldownOriginals.AttackCooldown == nil then
-                    SpecialCooldownOriginals.AttackCooldown = data.AttackCooldown
+                if SpecialCooldownOriginals.AttackCooldown[data] == nil then
+                    SpecialCooldownOriginals.AttackCooldown[data] = data.AttackCooldown
                 end
                 if meleeOn then
-                    data.AttackCooldown = math.max(0.001, SpecialCooldownOriginals.AttackCooldown * (meleeVal / SPECIAL_BASE))
+                    local newVal = SpecialCooldownOriginals.AttackCooldown[data] * (meleeVal / SPECIAL_BASE)
+                    data.AttackCooldown = math.max(MELEE_MIN, newVal)
                 else
-                    data.AttackCooldown = SpecialCooldownOriginals.AttackCooldown
+                    data.AttackCooldown = SpecialCooldownOriginals.AttackCooldown[data]
                 end
             end
         end
     end
 
+    -- 파이터의 실제 아이템 인스턴스에도 반영
     local fighter = getFighter()
     if fighter and type(fighter.Items) == 'table' then
         for _, item in pairs(fighter.Items) do
             local info = itemField(item, "Info")
             if type(info) == 'table' then
-                if scytheOn and type(info.DashCooldown) == 'number' and SpecialCooldownOriginals.DashCooldown then
-                    info.DashCooldown = math.max(0.001, SpecialCooldownOriginals.DashCooldown * (scytheVal / SPECIAL_BASE))
+                if scytheOn and type(info.DashCooldown) == 'number' and SpecialCooldownOriginals.DashCooldown[info] then
+                    info.DashCooldown = math.max(0.001, SpecialCooldownOriginals.DashCooldown[info] * (scytheVal / SPECIAL_BASE))
                 end
-                if axeOn and type(info.SpinCooldown) == 'number' and SpecialCooldownOriginals.SpinCooldown then
-                    info.SpinCooldown = math.max(0.001, SpecialCooldownOriginals.SpinCooldown * (axeVal / SPECIAL_BASE))
+                if axeOn and type(info.SpinCooldown) == 'number' and SpecialCooldownOriginals.SpinCooldown[info] then
+                    info.SpinCooldown = math.max(0.001, SpecialCooldownOriginals.SpinCooldown[info] * (axeVal / SPECIAL_BASE))
                 end
-                if katanaOn and type(info.DeflectCooldown) == 'number' and SpecialCooldownOriginals.DeflectCooldown then
-                    info.DeflectCooldown = math.max(0.001, SpecialCooldownOriginals.DeflectCooldown * (katanaVal / SPECIAL_BASE))
+                if katanaOn and type(info.DeflectCooldown) == 'number' and SpecialCooldownOriginals.DeflectCooldown[info] then
+                    info.DeflectCooldown = math.max(0.001, SpecialCooldownOriginals.DeflectCooldown[info] * (katanaVal / SPECIAL_BASE))
                 end
-                if knifeOn and type(info.HeavyAttackCooldown) == 'number' and SpecialCooldownOriginals.HeavyAttackCooldown then
-                    info.HeavyAttackCooldown = math.max(0.001, SpecialCooldownOriginals.HeavyAttackCooldown * (knifeVal / SPECIAL_BASE))
+                if knifeOn and type(info.HeavyAttackCooldown) == 'number' and SpecialCooldownOriginals.HeavyAttackCooldown[info] then
+                    info.HeavyAttackCooldown = math.max(0.001, SpecialCooldownOriginals.HeavyAttackCooldown[info] * (knifeVal / SPECIAL_BASE))
                 end
-                if gunOn and type(info.ShootCooldown) == 'number' and SpecialCooldownOriginals.ShootCooldown then
-                    info.ShootCooldown = math.max(0.001, SpecialCooldownOriginals.ShootCooldown * (gunVal / SPECIAL_BASE))
+                if gunOn and type(info.ShootCooldown) == 'number' and SpecialCooldownOriginals.ShootCooldown[info] then
+                    local newVal = SpecialCooldownOriginals.ShootCooldown[info] * (gunVal / SPECIAL_BASE)
+                    info.ShootCooldown = math.max(GUN_MIN, newVal)
                 end
-                if meleeOn and type(info.AttackCooldown) == 'number' and SpecialCooldownOriginals.AttackCooldown then
-                    info.AttackCooldown = math.max(0.001, SpecialCooldownOriginals.AttackCooldown * (meleeVal / SPECIAL_BASE))
+                if meleeOn and type(info.AttackCooldown) == 'number' and SpecialCooldownOriginals.AttackCooldown[info] then
+                    local newVal = SpecialCooldownOriginals.AttackCooldown[info] * (meleeVal / SPECIAL_BASE)
+                    info.AttackCooldown = math.max(MELEE_MIN, newVal)
                 end
             end
         end
@@ -888,11 +858,6 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
 
     pcall(applySpecialCooldowns)
 
-    -- No Recoil 체크되어 있으면 매 프레임 재적용 (게임이 되돌릴 경우 대비)
-    if safeToggle("NoRecoilEnabled") then
-        pcall(applyNoRecoil)
-    end
-
     local now = os.clock()
     local root = getRoot()
     local hum = getHum()
@@ -1147,28 +1112,13 @@ Underground_Toggle:AddKeyPicker("UndergroundKey", {
 -- ============================================================
 -- Speed Control
 -- ============================================================
-
--- No Recoil (토글만, 슬라이더 없음)
-SCBox:AddCheckbox("NoRecoilEnabled", {
-    Text = "No Recoil",
-    Default = false,
-    Tooltip = "Removes gun recoil (sets ShootRecoil to 0).",
-    Callback = function(Value)
-        if Value then
-            if RageModule.applyNoRecoil then RageModule.applyNoRecoil() end
-        else
-            if RageModule.revertNoRecoil then RageModule.revertNoRecoil() end
-        end
-    end,
-})
-
 SCBox:AddCheckbox("NoSpread", { Text = "No Spread", Default = false })
 
 -- Fire Cooldown (Guns) - toggle + hidden slider
 SCBox:AddCheckbox("FireCooldownEnabled", {
     Text = "Fire Cooldown (Guns)",
     Default = false,
-    Tooltip = "Controls all gun fire rate. Slider 75 = original, 0 = instant.",
+    Tooltip = "Controls all gun fire rate. Slider 75 = original, 0 = fastest (safe floor 0.02s).",
     Callback = function()
         if RageModule.applySpecialCooldowns then RageModule.applySpecialCooldowns() end
     end,
@@ -1186,7 +1136,7 @@ FireCooldownBox:SetupDependencies({ { Toggles.FireCooldownEnabled, true } })
 SCBox:AddCheckbox("MeleeCooldownEnabled", {
     Text = "Melee Cooldown (Melee)",
     Default = false,
-    Tooltip = "Controls all melee attack speed. Slider 75 = original, 0 = instant.",
+    Tooltip = "Controls all melee attack speed. Slider 75 = original, 0 = fastest (safe floor 0.02s).",
     Callback = function()
         if RageModule.applySpecialCooldowns then RageModule.applySpecialCooldowns() end
     end,
