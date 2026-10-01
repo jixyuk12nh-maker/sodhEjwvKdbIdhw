@@ -668,7 +668,7 @@ AnimationBox:AddCheckbox("AnimationEnabled", {
     end
 })
 
--- Animation 관련 UI는 Enabled 토글의 Depbox에 전부 넣음
+-- Animation 관련 UI 전부 Enabled 토글의 Depbox에
 local AnimationControlsBox = AnimationBox:AddDependencyBox()
 
 AnimationControlsBox:AddDropdown("AnimationSelected", {
