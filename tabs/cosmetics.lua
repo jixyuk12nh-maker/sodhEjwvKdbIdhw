@@ -117,13 +117,7 @@ return CosmeticsWrap.assetsFolder("Charms")
 end)
 end
 
-CosmeticsWrap.DataHook = {
-spoofs = {},
-restore = nil,
-conn = nil,
-loaded = false,
-_signalCache = {},
-}
+CosmeticsWrap.DataHook = { spoofs = {}, restore = nil, conn = nil, loaded = false, _signalCache = {} }
 
 function CosmeticsWrap.DataHook.load(current)
 local hook = CosmeticsWrap.DataHook
@@ -877,25 +871,12 @@ CosmeticsWrap.Scene.reloadEquipped()
 end)
 end
 
-function CosmeticsWrap.syncStateToInput()
-    if not CosmeticsWrap._stateInput then return end
-    local ok, encoded = pcall(function()
-        return game:GetService("HttpService"):JSONEncode(CosmeticsWrap.selections)
-    end)
-    if ok and encoded then
-        pcall(function()
-            CosmeticsWrap._stateInput:SetValue(encoded)
-        end)
-    end
-end
-
 function CosmeticsWrap.set(weaponName, selection)
     CosmeticsWrap.selections[weaponName] = selection
     CosmeticsWrap.DataHook.trigger("WeaponInventory")
     CosmeticsWrap.DataHook.trigger("CosmeticInventory")
     CosmeticsWrap._queueReload(weaponName, selection)
     CosmeticsWrap.Scene.requestRefresh()
-    CosmeticsWrap.syncStateToInput()
 end
 
 function CosmeticsWrap.clear(weaponName)
@@ -904,7 +885,6 @@ function CosmeticsWrap.clear(weaponName)
     CosmeticsWrap.DataHook.trigger("CosmeticInventory")
     CosmeticsWrap._queueReload(weaponName, nil)
     CosmeticsWrap.Scene.requestRefresh()
-    CosmeticsWrap.syncStateToInput()
 end
 
 function CosmeticsWrap.applyAll()
@@ -1022,48 +1002,81 @@ task.spawn(function()
     end
 end)
 
-local CosmeticsStateHolder = Cosmetics:AddGroupbox({ Name = "StateData", Side = 2 })
+local UnlockAllBox = Cosmetics:AddGroupbox({ Name = "Unlock All", Side = 2 })
 
-CosmeticsWrap._stateInput = CosmeticsStateHolder:AddInput("CosmeticsState", {
-    Text = "Data",
-    Default = "",
-    Placeholder = "",
+local UnlockActive = false
+local UnlockCache = nil
+
+local function buildUnlockInventory()
+    local out = {}
+    local modules = ReplicatedStorage:FindFirstChild("Modules")
+    if not modules then return out end
+
+    local cosModule = modules:FindFirstChild("CosmeticLibrary")
+    local itemModule = modules:FindFirstChild("ItemLibrary")
+    if not cosModule or not itemModule then return out end
+
+    local okC, cosLib = pcall(require, cosModule)
+    local okI, itemLib = pcall(require, itemModule)
+    if not okC or not okI then return out end
+    if typeof(cosLib.Cosmetics) ~= "table" then return out end
+
+    local allItems = {}
+    if typeof(itemLib.Items) == "table" then
+        for name in pairs(itemLib.Items) do allItems[name] = true end
+    end
+
+    for name, data in pairs(cosLib.Cosmetics) do
+        if typeof(data) == "table" then
+            local kind = data.Type
+            if kind == "Skin" then
+                out[name] = true
+            elseif kind == "Wrap" or kind == "Charm" or kind == "Finisher" then
+                out[name] = allItems
+            elseif kind == "Emote" then
+                out[name] = true
+            end
+        end
+    end
+
+    return out
+end
+
+local function installUnlock()
+    if UnlockActive then return end
+    UnlockCache = buildUnlockInventory()
+    CosmeticsWrap.DataHook.set("CosmeticInventory", function(_original)
+        return UnlockCache or {}
+    end)
+    CosmeticsWrap.DataHook.trigger("CosmeticInventory")
+    CosmeticsWrap.DataHook.trigger("WeaponInventory")
+    UnlockActive = true
+end
+
+local function uninstallUnlock()
+    if not UnlockActive then return end
+    CosmeticsWrap.DataHook.unset("CosmeticInventory")
+    CosmeticsWrap.DataHook.destroy()
+    CosmeticsWrap.DataHook.trigger("CosmeticInventory")
+    CosmeticsWrap.DataHook.trigger("WeaponInventory")
+    UnlockActive = false
+    UnlockCache = nil
+end
+
+UnlockAllBox:AddCheckbox("UnlockAllEnabled", {
+    Text = "Unlock All Cosmetics", Default = false,
+    Callback = function(v)
+        if v then
+            installUnlock()
+        else
+            uninstallUnlock()
+        end
+    end,
 })
 
 task.spawn(function()
-    task.wait(1)
-    local input = CosmeticsWrap._stateInput
-    if input then
-        pcall(function() if input.SetVisible then input:SetVisible(false) end end)
-        pcall(function() if input.Holder then input.Holder.Visible = false end end)
-        pcall(function() if input.Container then input.Container.Visible = false end end)
-        pcall(function() if input.Frame then input.Frame.Visible = false end end)
-        pcall(function() if input.TextLabel then input.TextLabel.Visible = false end end)
-        pcall(function() if input.Textbox then input.Textbox.Visible = false end end)
-        pcall(function() if input.UIElements then for _, el in pairs(input.UIElements) do if el.Visible ~= nil then el.Visible = false end end end end)
-    end
-    if CosmeticsStateHolder then
-        pcall(function() if CosmeticsStateHolder.Container then CosmeticsStateHolder.Container.Visible = false end end)
-        pcall(function() if CosmeticsStateHolder.Frame then CosmeticsStateHolder.Frame.Visible = false end end)
-        pcall(function() if CosmeticsStateHolder.Holder then CosmeticsStateHolder.Holder.Visible = false end end)
-    end
-end)
-
-task.spawn(function()
-    task.wait(7)
-    local input = CosmeticsWrap._stateInput
-    if not input then return end
-    local raw = input.Value
-    if not raw or raw == "" then return end
-    local ok, decoded = pcall(function()
-        return game:GetService("HttpService"):JSONDecode(raw)
-    end)
-    if ok and type(decoded) == "table" then
-        CosmeticsWrap.selections = decoded
-        task.wait(1)
-        CosmeticsWrap.applyAll()
-        print("[Cosmetics] Loaded saved state")
-    end
+    task.wait(3)
+    UnlockCache = buildUnlockInventory()
 end)
 
 local Group = Cosmetics:AddGroupbox({ Name = "Rivals Cosmetics", Side = 1 })
