@@ -443,8 +443,12 @@ end
 
 Hub.stopAnimation = stopAnimation
 
+-- ============================================================
+-- Movement groupbox
+-- ============================================================
 local MovementBox = Character:AddGroupbox({ Name = "Movement", Side = 1 })
 
+-- Velocity (토글 + 숨겨진 슬라이더)
 MovementBox:AddCheckbox("VelocityEnabled", {
     Text = "Velocity", Default = false,
     Callback = function(Value)
@@ -461,12 +465,14 @@ MovementBox:AddCheckbox("VelocityEnabled", {
         end
     end
 })
-
-MovementBox:AddSlider("VelocitySpeed", {
-    Text = "Velocity Speed", Default = 50, Min = 0, Max = 250, Rounding = 0,
+local VelocityBox = MovementBox:AddDependencyBox()
+VelocityBox:AddSlider("VelocitySpeed", {
+    Text = "Speed", Default = 50, Min = 0, Max = 250, Rounding = 0, Compact = true,
     Callback = function(Value) movementState.VelocitySpeed = Value end
 })
+VelocityBox:SetupDependencies({ { Toggles.VelocityEnabled, true } })
 
+-- Slide Boost (토글 + 숨겨진 슬라이더)
 MovementBox:AddCheckbox("SlideBoostEnabled", {
     Text = "Slide Boost", Default = false,
     Callback = function(Value)
@@ -487,12 +493,14 @@ MovementBox:AddCheckbox("SlideBoostEnabled", {
         end
     end
 })
-
-MovementBox:AddSlider("SlideBoostValue", {
-    Text = "Slide Boost", Default = 1, Min = 1, Max = 5, Rounding = 1,
+local SlideBoostBox = MovementBox:AddDependencyBox()
+SlideBoostBox:AddSlider("SlideBoostValue", {
+    Text = "Multiplier", Default = 1, Min = 1, Max = 5, Rounding = 1, Compact = true,
     Callback = function(Value) movementState.SlideBoostValue = Value restoreSlideBoost() end
 })
+SlideBoostBox:SetupDependencies({ { Toggles.SlideBoostEnabled, true } })
 
+-- Double Jump Height (토글 + 숨겨진 슬라이더)
 MovementBox:AddCheckbox("DoubleJumpEnabled", {
     Text = "Double Jump Height", Default = false,
     Callback = function(Value)
@@ -500,12 +508,14 @@ MovementBox:AddCheckbox("DoubleJumpEnabled", {
         if Value then installMovementHooks() end
     end
 })
-
-MovementBox:AddSlider("DoubleJumpValue", {
-    Text = "Double Jump Height", Default = 1, Min = 1, Max = 10, Rounding = 1,
+local DoubleJumpBox = MovementBox:AddDependencyBox()
+DoubleJumpBox:AddSlider("DoubleJumpValue", {
+    Text = "Multiplier", Default = 1, Min = 1, Max = 10, Rounding = 1, Compact = true,
     Callback = function(Value) movementState.DoubleJumpValue = Value end
 })
+DoubleJumpBox:SetupDependencies({ { Toggles.DoubleJumpEnabled, true } })
 
+-- Maul Slam Multiplier (토글 + 숨겨진 슬라이더)
 MovementBox:AddCheckbox("MaulSlamEnabled", {
     Text = "Maul Slam Multiplier", Default = false,
     Callback = function(Value)
@@ -523,12 +533,14 @@ MovementBox:AddCheckbox("MaulSlamEnabled", {
         end
     end
 })
-
-MovementBox:AddSlider("MaulSlamValue", {
-    Text = "Maul Slam Multiplier", Default = 1, Min = 1, Max = 10, Rounding = 1,
+local MaulSlamBox = MovementBox:AddDependencyBox()
+MaulSlamBox:AddSlider("MaulSlamValue", {
+    Text = "Multiplier", Default = 1, Min = 1, Max = 10, Rounding = 1, Compact = true,
     Callback = function(Value) movementState.MaulSlamValue = Value restoreMovementItemInfo() end
 })
+MaulSlamBox:SetupDependencies({ { Toggles.MaulSlamEnabled, true } })
 
+-- Infinite Double Jump (체크박스만)
 MovementBox:AddCheckbox("InfiniteDoubleJump", {
     Text = "Infinite Double Jump", Default = false,
     Callback = function(Value)
@@ -547,6 +559,9 @@ MovementBox:AddCheckbox("InfiniteDoubleJump", {
     end
 })
 
+-- ============================================================
+-- Fly & Noclip groupbox
+-- ============================================================
 local FlyNoclipBox = Character:AddGroupbox({ Name = "Fly & Noclip", Side = 2 })
 
 local Noclip_Toggle = FlyNoclipBox:AddToggle("Noclip", {
@@ -600,10 +615,13 @@ Fly_Toggle:AddKeyPicker("FlyKey", {
     Text = "Fly", Default = nil, Mode = "Toggle", SyncToggleState = true,
 })
 
-FlyNoclipBox:AddSlider("FlySpeed", {
-    Text = "Fly Speed", Default = 50, Min = 50, Max = 300, Rounding = 0,
+-- Fly Speed (Fly 토글의 Depbox)
+local FlySpeedBox = FlyNoclipBox:AddDependencyBox()
+FlySpeedBox:AddSlider("FlySpeed", {
+    Text = "Fly Speed", Default = 50, Min = 50, Max = 300, Rounding = 0, Compact = true,
     Callback = function(Value) flyState.Speed = Value end
 })
+FlySpeedBox:SetupDependencies({ { Toggles.FlyEnabled, true } })
 
 FlyNoclipBox:AddCheckbox("ThirdPerson", {
     Text = "Third Person", Default = false,
@@ -626,6 +644,9 @@ FlyNoclipBox:AddCheckbox("ThirdPerson", {
     end
 })
 
+-- ============================================================
+-- Animation Player groupbox
+-- ============================================================
 local AnimationBox = Character:AddGroupbox({ Name = "Animation Player", Side = 2 })
 
 AnimationBox:AddCheckbox("AnimationEnabled", {
@@ -647,7 +668,10 @@ AnimationBox:AddCheckbox("AnimationEnabled", {
     end
 })
 
-AnimationBox:AddDropdown("AnimationSelected", {
+-- Animation 관련 UI는 Enabled 토글의 Depbox에 전부 넣음
+local AnimationControlsBox = AnimationBox:AddDependencyBox()
+
+AnimationControlsBox:AddDropdown("AnimationSelected", {
     Text = "Animation", Values = animationList, Default = "Floss", Multi = false,
     Callback = function(Value)
         animState.Selected = Value
@@ -656,7 +680,7 @@ AnimationBox:AddDropdown("AnimationSelected", {
     end
 })
 
-AnimationBox:AddInput("AnimationCustom", {
+AnimationControlsBox:AddInput("AnimationCustom", {
     Text = "Custom Animation ID", Default = "",
     Placeholder = "ex: 4049646104",
     Callback = function(Value)
@@ -667,8 +691,8 @@ AnimationBox:AddInput("AnimationCustom", {
     end
 })
 
-AnimationBox:AddSlider("AnimationSpeed", {
-    Text = "Speed", Default = 1, Min = 1, Max = 5, Rounding = 1,
+AnimationControlsBox:AddSlider("AnimationSpeed", {
+    Text = "Speed", Default = 1, Min = 1, Max = 5, Rounding = 1, Compact = true,
     Callback = function(Value)
         animState.Speed = Value
         if animState.CurrentTrack then
@@ -676,5 +700,7 @@ AnimationBox:AddSlider("AnimationSpeed", {
         end
     end
 })
+
+AnimationControlsBox:SetupDependencies({ { Toggles.AnimationEnabled, true } })
 
 return true
