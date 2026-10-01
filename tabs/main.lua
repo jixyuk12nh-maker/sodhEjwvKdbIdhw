@@ -374,18 +374,16 @@ getgenv().__MinhoRageSpeedBoost = speedBoostOriginal
 -- ============================================================
 local NoSpreadState = {
     Hooked = false,
-    -- 원본 upvalue 참조 저장
-    Method = nil,        -- ClientItem.Input 함수
-    Index = nil,         -- 숫자 인덱스 or {bundle = table, key = any}
-    Original = nil,      -- 원본 ReplicatedStorage 참조
-    Dummy = nil,         -- 교체된 dummy
-    Bindings = nil,      -- packet handler 목록
+    Method = nil,
+    Index = nil,
+    Original = nil,
+    Dummy = nil,
+    Bindings = nil,
 }
 
 local function NoSpread_Load()
     if NoSpreadState.Hooked then return true end
 
-    -- Executor 지원 확인
     if not (setrawmetatable and clonefunction and debug.getupvalues and debug.setupvalue and getgc) then
         return false
     end
@@ -393,7 +391,6 @@ local function NoSpread_Load()
     local RS = ReplicatedStorage
     local LP = LocalPlayer
 
-    -- UseItem Remote
     local remote
     do
         local r = RS:FindFirstChild('Remotes')
@@ -403,7 +400,6 @@ local function NoSpread_Load()
     end
     if not (remote and remote:IsA('RemoteEvent')) then return false end
 
-    -- ClientItem 모듈
     local clientItem
     do
         local ps = LP:FindFirstChild('PlayerScripts')
@@ -415,7 +411,6 @@ local function NoSpread_Load()
     end
     if type(clientItem) ~= 'table' then return false end
 
-    -- EnumLibrary._from_enum
     local fromEnum
     do
         local md = RS:FindFirstChild('Modules')
@@ -424,7 +419,6 @@ local function NoSpread_Load()
     end
     if type(fromEnum) ~= 'table' then return false end
 
-    -- FighterController (getgc)
     local fighterController
     local function LocalFighter()
         if not fighterController then
@@ -482,7 +476,6 @@ local function NoSpread_Load()
 
     setrawmetatable(dummy, { __index = function() return remoteTree end })
 
-    -- Hook: 원본 upvalue 저장 + dummy로 교체
     local inputMethod = rawget(clientItem, 'Input')
     if not inputMethod then return false end
 
@@ -514,14 +507,12 @@ local function NoSpread_Load()
 
     if foundIndex == nil then return false end
 
-    -- 교체 실행
     if type(foundIndex) == "table" then
         foundIndex.bundle[foundIndex.key] = dummy
     else
         debug.setupvalue(inputMethod, foundIndex, dummy)
     end
 
-    -- No Spread 핸들러 등록
     table.insert(bindings, {
         enabled = true,
         handler = function(packet)
@@ -534,7 +525,6 @@ local function NoSpread_Load()
         end,
     })
 
-    -- 상태 저장
     NoSpreadState.Method = inputMethod
     NoSpreadState.Index = foundIndex
     NoSpreadState.Original = foundOriginal
@@ -559,7 +549,6 @@ local function NoSpread_Unload()
         end
     end
 
-    -- 상태 초기화
     NoSpreadState.Hooked = false
     NoSpreadState.Method = nil
     NoSpreadState.Index = nil
@@ -1265,10 +1254,18 @@ local OffBox    = Main:AddGroupbox({ Name = "Offsets", Side = 2 })
 local RBox      = Main:AddGroupbox({ Name = "Rage", Side = 2 })
 local SCBox     = Main:AddGroupbox({ Name = "Speed Control", Side = 2 })
 
-RageBox:AddCheckbox("RageEnabled", {
+-- ★ 변경: AddCheckbox → AddToggle + AddKeyPicker (Default = "None")
+local RageEnabledToggle = RageBox:AddToggle("RageEnabled", {
     Text = "Ragebot Enabled", Default = false,
     Callback = function(v) Config.Enabled = v end,
 })
+RageEnabledToggle:AddKeyPicker("RageEnabledKey", {
+    Text = "Ragebot Toggle",
+    Default = "None",
+    Mode = "Toggle",
+    SyncToggleState = true,
+})
+
 RageBox:AddDropdown("EvasionMode", {
     Text = "Evasion Mode", Values = { "Off", "Lobby", "Random" },
     Default = "Random", Multi = false,
@@ -1328,17 +1325,15 @@ OffBox:AddSlider("SpeedBoost", {
         removeSpeedBoost()
     end })
 
-local UERage_Toggle = RBox:AddToggle("UEAssistedRage", {
+-- ★ 변경: Rage 쪽 토글 → 체크박스 (키 피커 제거)
+RBox:AddCheckbox("UEAssistedRage", {
     Text = "UE Assisted Rage", Default = false,
     Callback = function(Value)
         setUERage(Value)
-    end
-})
-UERage_Toggle:AddKeyPicker("UERageKey", {
-    Text = "UE Assisted Rage", Default = nil, Mode = "Toggle", SyncToggleState = true,
+    end,
 })
 
-local Underground_Toggle = RBox:AddToggle("Underground", {
+RBox:AddCheckbox("Underground", {
     Text = "Underground", Default = false,
     Callback = function(Value)
         if Value then
@@ -1346,10 +1341,7 @@ local Underground_Toggle = RBox:AddToggle("Underground", {
         else
             stopUnderground()
         end
-    end
-})
-Underground_Toggle:AddKeyPicker("UndergroundKey", {
-    Text = "Underground", Default = nil, Mode = "Toggle", SyncToggleState = true,
+    end,
 })
 
 -- ============================================================
