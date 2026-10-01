@@ -23,15 +23,6 @@ local Config = {
     },
     SilentAim = { Enabled = true, FOV = 2000 },
     AutoPickup = { Enabled = true, Range = 250, Health = true, Ammo = true },
-
-    -- ▼ 무기별 개별 쿨다운 (각자 Enabled / Value)
-    AdvancedCooldown = {
-        Dash        = { Enabled = false, Value = 15 },  -- 낫 대시
-        SpinAttack  = { Enabled = false, Value = 15 },  -- 전투도끼 회전
-        Deflect     = { Enabled = false, Value = 15 },  -- 카타나 튕겨내기
-        HeavyAttack = { Enabled = false, Value = 15 },  -- 나이프 강공격
-        QuickShot   = { Enabled = false, Value = 15 },  -- 리볼버 퀵샷
-    },
 }
 Hub.RageConfig = Config
 getgenv().__MinhoRageConfig = Config
@@ -375,15 +366,99 @@ end
 local speedBoostOriginal = getgenv().__MinhoRageSpeedBoost or nil
 getgenv().__MinhoRageSpeedBoost = speedBoostOriginal
 
--- 필드 → Config 키 매핑
-local ADVANCED_FIELD_MAP = {
-    DashCooldown        = "Dash",
-    SpinCooldown        = "SpinAttack",
-    DeflectCooldown     = "Deflect",
-    HeavyAttackCooldown = "HeavyAttack",
-    QuickShotCooldown   = "QuickShot",
-}
+-- ============================================================
+-- 특수 스킬 쿨다운 (Info 테이블 직접 조절)
+-- 슬라이더 75 = 원본, 0 = 무한(0.001초), 100 = 원본의 1.33배
+-- 계산: 새 값 = 원본 × (슬라이더 / 75)
+-- ============================================================
+local SPECIAL_BASE = 75  -- 중립값
 
+local SpecialCooldownOriginals = getgenv().__MinhoSpecialCooldownOriginals or {
+    DashCooldown        = nil,
+    SpinCooldown        = nil,
+    DeflectCooldown     = nil,
+    HeavyAttackCooldown = nil,
+}
+getgenv().__MinhoSpecialCooldownOriginals = SpecialCooldownOriginals
+
+local function applySpecialCooldowns()
+    local ok, lib = pcall(function() return require(ReplicatedStorage.Modules.ItemLibrary) end)
+    if not ok or not lib or type(lib.Items) ~= 'table' then return end
+
+    local scytheOn  = Toggles.ScytheDashToggle and Toggles.ScytheDashToggle.Value == true
+    local scytheVal = Options.ScytheDashSlider and Options.ScytheDashSlider.Value or SPECIAL_BASE
+
+    local axeOn     = Toggles.AxeSpinToggle and Toggles.AxeSpinToggle.Value == true
+    local axeVal    = Options.AxeSpinSlider and Options.AxeSpinSlider.Value or SPECIAL_BASE
+
+    local katanaOn  = Toggles.KatanaDeflectToggle and Toggles.KatanaDeflectToggle.Value == true
+    local katanaVal = Options.KatanaDeflectSlider and Options.KatanaDeflectSlider.Value or SPECIAL_BASE
+
+    local knifeOn   = Toggles.KnifeHeavyToggle and Toggles.KnifeHeavyToggle.Value == true
+    local knifeVal  = Options.KnifeHeavySlider and Options.KnifeHeavySlider.Value or SPECIAL_BASE
+
+    for _, data in pairs(lib.Items) do
+        if type(data) == 'table' then
+            -- 낫 대시
+            if type(data.DashCooldown) == 'number' then
+                if SpecialCooldownOriginals.DashCooldown == nil then
+                    SpecialCooldownOriginals.DashCooldown = data.DashCooldown
+                end
+                if scytheOn then
+                    local mult = scytheVal / SPECIAL_BASE
+                    data.DashCooldown = math.max(0.001, SpecialCooldownOriginals.DashCooldown * mult)
+                else
+                    data.DashCooldown = SpecialCooldownOriginals.DashCooldown
+                end
+            end
+
+            -- 전투도끼 회전
+            if type(data.SpinCooldown) == 'number' then
+                if SpecialCooldownOriginals.SpinCooldown == nil then
+                    SpecialCooldownOriginals.SpinCooldown = data.SpinCooldown
+                end
+                if axeOn then
+                    local mult = axeVal / SPECIAL_BASE
+                    data.SpinCooldown = math.max(0.001, SpecialCooldownOriginals.SpinCooldown * mult)
+                else
+                    data.SpinCooldown = SpecialCooldownOriginals.SpinCooldown
+                end
+            end
+
+            -- 카타나 튕겨내기
+            if type(data.DeflectCooldown) == 'number' then
+                if SpecialCooldownOriginals.DeflectCooldown == nil then
+                    SpecialCooldownOriginals.DeflectCooldown = data.DeflectCooldown
+                end
+                if katanaOn then
+                    local mult = katanaVal / SPECIAL_BASE
+                    data.DeflectCooldown = math.max(0.001, SpecialCooldownOriginals.DeflectCooldown * mult)
+                else
+                    data.DeflectCooldown = SpecialCooldownOriginals.DeflectCooldown
+                end
+            end
+
+            -- 나이프 강공격
+            if type(data.HeavyAttackCooldown) == 'number' then
+                if SpecialCooldownOriginals.HeavyAttackCooldown == nil then
+                    SpecialCooldownOriginals.HeavyAttackCooldown = data.HeavyAttackCooldown
+                end
+                if knifeOn then
+                    local mult = knifeVal / SPECIAL_BASE
+                    data.HeavyAttackCooldown = math.max(0.001, SpecialCooldownOriginals.HeavyAttackCooldown * mult)
+                else
+                    data.HeavyAttackCooldown = SpecialCooldownOriginals.HeavyAttackCooldown
+                end
+            end
+        end
+    end
+end
+
+RageModule.applySpecialCooldowns = applySpecialCooldowns
+
+-- ============================================================
+-- 기존 Speed Boost
+-- ============================================================
 local function applySpeedBoost()
     if speedBoostOriginal ~= nil then return end
     local ok, lib = pcall(function() return require(ReplicatedStorage.Modules.ItemLibrary) end)
@@ -394,12 +469,8 @@ local function applySpeedBoost()
         "AttackCooldown", "AttackDelay", "SwingCooldown", "MeleeCooldown",
         "Cooldown", "RecoveryTime", "ResetTime", "SwingTime", "SwingDelay",
         "ComboCooldown", "FireCooldown", "ReloadLength",
-        -- 고급 필드
-        "DashCooldown", "SpinCooldown", "DeflectCooldown",
-        "HeavyAttackCooldown", "QuickShotCooldown",
     }
     local mult = Config.SpeedBoostMult
-    local adv = Config.AdvancedCooldown
     for name, data in pairs(lib.Items) do
         if type(data) == "table" then
             local orig = {}
@@ -407,17 +478,7 @@ local function applySpeedBoost()
                 if data[f] ~= nil then
                     orig[f] = data[f]
                     if type(data[f]) == "number" then
-                        local advKey = ADVANCED_FIELD_MAP[f]
-                        local advEntry = advKey and adv[advKey] or nil
-                        -- 무기별 토글이 켜져 있으면 개별 감소율, 아니면 기본 배율
-                        if advEntry and advEntry.Enabled then
-                            local pct = math.clamp(advEntry.Value or 0, 0, 100)
-                            if pct > 0 then
-                                data[f] = math.max(0.001, data[f] * (1 - pct / 100))
-                            end
-                        else
-                            data[f] = data[f] * mult
-                        end
+                        data[f] = data[f] * mult
                     end
                 end
             end
@@ -1041,55 +1102,110 @@ local MeleeCooldownBox = SCBox:AddCheckbox("MeleeCooldownEnabled", {
 })
 
 -- ============================================================
--- ▼ 무기별 개별 쿨다운 (각 버튼 → 숨겨진 슬라이더)
+-- ▼▼ 특수 무기 쿨다운 (낫/도끼/카타나/나이프)
+-- 슬라이더 75 = 원본, 0 = 무한, 100 = 더 느림
 -- ============================================================
 
--- 공통 헬퍼: 무기별 체크박스 + 숨겨진 슬라이더 한 쌍 생성
-local function AddWeaponCooldownControl(configKey, checkboxText, sliderText)
-    -- 1) 무기 버튼 (체크박스)
-    local checkboxId = "Adv_" .. configKey .. "_Toggle"
-    local sliderId   = "Adv_" .. configKey .. "_Slider"
+-- 낫 대시 (Scythe Dash)
+SCBox:AddToggle("ScytheDashToggle", {
+    Text = "낫 대시 (Scythe)",
+    Default = false,
+    Tooltip = "낫 대시 쿨다운 조절. 75 = 원본, 0 = 무한, 100 = 느림.",
+    Callback = function(Value)
+        if RageModule.applySpecialCooldowns then
+            RageModule.applySpecialCooldowns()
+        end
+    end,
+})
+local ScytheDashBox = SCBox:AddDependencyBox()
+ScytheDashBox:AddSlider("ScytheDashSlider", {
+    Text = "쿨다운 배율",
+    Default = 75,
+    Min = 0, Max = 100, Rounding = 0,
+    Tooltip = "75 = 원본 / 0 = 무한 / 100 = 느림",
+    Callback = function()
+        if Toggles.ScytheDashToggle.Value and RageModule.applySpecialCooldowns then
+            RageModule.applySpecialCooldowns()
+        end
+    end,
+})
+ScytheDashBox:SetupDependencies({ { Toggles.ScytheDashToggle, true } })
 
-    SCBox:AddCheckbox(checkboxId, {
-        Text = checkboxText,
-        Default = false,
-        Callback = function(Value)
-            Config.AdvancedCooldown[configKey].Enabled = Value
-            -- 즉시 재적용
-            if Config.Enabled then
-                removeSpeedBoost()
-                applySpeedBoost()
-            end
-        end,
-    })
+-- 전투도끼 회전 (Battle Axe Spin)
+SCBox:AddToggle("AxeSpinToggle", {
+    Text = "전투도끼 대시 (Battle Axe)",
+    Default = false,
+    Tooltip = "전투도끼 대시 쿨다운 조절. 75 = 원본, 0 = 무한, 100 = 느림.",
+    Callback = function(Value)
+        if RageModule.applySpecialCooldowns then
+            RageModule.applySpecialCooldowns()
+        end
+    end,
+})
+local AxeSpinBox = SCBox:AddDependencyBox()
+AxeSpinBox:AddSlider("AxeSpinSlider", {
+    Text = "쿨다운 배율",
+    Default = 75,
+    Min = 0, Max = 100, Rounding = 0,
+    Tooltip = "75 = 원본 / 0 = 무한 / 100 = 느림",
+    Callback = function()
+        if Toggles.AxeSpinToggle.Value and RageModule.applySpecialCooldowns then
+            RageModule.applySpecialCooldowns()
+        end
+    end,
+})
+AxeSpinBox:SetupDependencies({ { Toggles.AxeSpinToggle, true } })
 
-    -- 2) 숨겨진 슬라이더를 담을 DependencyBox
-    local depBox = SCBox:AddDependencyBox()
-    depBox:AddSlider(sliderId, {
-        Text = sliderText,
-        Default = 15,
-        Min = 0,
-        Max = 100,
-        Rounding = 0,
-        Suffix = "%",
-        Callback = function(v)
-            Config.AdvancedCooldown[configKey].Value = v
-            if Config.AdvancedCooldown[configKey].Enabled and Config.Enabled then
-                removeSpeedBoost()
-                applySpeedBoost()
-            end
-        end,
-    })
+-- 카타나 튕겨내기 (Katana Deflect)
+SCBox:AddToggle("KatanaDeflectToggle", {
+    Text = "카타나 튕겨내기 (Katana)",
+    Default = false,
+    Tooltip = "카타나 튕겨내기 쿨다운 조절. 75 = 원본, 0 = 무한, 100 = 느림.",
+    Callback = function(Value)
+        if RageModule.applySpecialCooldowns then
+            RageModule.applySpecialCooldowns()
+        end
+    end,
+})
+local KatanaDeflectBox = SCBox:AddDependencyBox()
+KatanaDeflectBox:AddSlider("KatanaDeflectSlider", {
+    Text = "쿨다운 배율",
+    Default = 75,
+    Min = 0, Max = 100, Rounding = 0,
+    Tooltip = "75 = 원본 / 0 = 무한 / 100 = 느림",
+    Callback = function()
+        if Toggles.KatanaDeflectToggle.Value and RageModule.applySpecialCooldowns then
+            RageModule.applySpecialCooldowns()
+        end
+    end,
+})
+KatanaDeflectBox:SetupDependencies({ { Toggles.KatanaDeflectToggle, true } })
 
-    -- 3) 체크박스가 켜지면 슬라이더 자동 표시
-    depBox:SetupDependencies({ { Toggles[checkboxId], true } })
-end
+-- 나이프 강공격 (Knife Heavy)
+SCBox:AddToggle("KnifeHeavyToggle", {
+    Text = "나이프 강공격 (Knife)",
+    Default = false,
+    Tooltip = "나이프 강공격 쿨다운 조절. 75 = 원본, 0 = 무한, 100 = 느림.",
+    Callback = function(Value)
+        if RageModule.applySpecialCooldowns then
+            RageModule.applySpecialCooldowns()
+        end
+    end,
+})
+local KnifeHeavyBox = SCBox:AddDependencyBox()
+KnifeHeavyBox:AddSlider("KnifeHeavySlider", {
+    Text = "쿨다운 배율",
+    Default = 75,
+    Min = 0, Max = 100, Rounding = 0,
+    Tooltip = "75 = 원본 / 0 = 무한 / 100 = 느림",
+    Callback = function()
+        if Toggles.KnifeHeavyToggle.Value and RageModule.applySpecialCooldowns then
+            RageModule.applySpecialCooldowns()
+        end
+    end,
+})
+KnifeHeavyBox:SetupDependencies({ { Toggles.KnifeHeavyToggle, true } })
 
--- 무기별 5종
-AddWeaponCooldownControl("Dash",        "낫 대시 (Scythe)",       "대시 쿨다운 감소율")
-AddWeaponCooldownControl("SpinAttack",  "전투도끼 (Battle Axe)",   "회전 공격 쿨다운 감소율")
-AddWeaponCooldownControl("Deflect",     "카타나 (Katana)",        "튕겨내기 쿨다운 감소율")
-AddWeaponCooldownControl("HeavyAttack", "나이프 (Knife)",         "강공격 쿨다운 감소율")
-AddWeaponCooldownControl("QuickShot",   "리볼버 (Revolver)",      "퀵샷 쿨다운 감소율")
+-- ▲▲ 특수 무기 쿨다운 끝
 
 return true
