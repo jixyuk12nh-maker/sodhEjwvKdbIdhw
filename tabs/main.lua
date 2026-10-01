@@ -370,9 +370,54 @@ local speedBoostOriginal = getgenv().__MinhoRageSpeedBoost or nil
 getgenv().__MinhoRageSpeedBoost = speedBoostOriginal
 
 -- ============================================================
--- Special Skill Cooldowns
--- Slider 75 = original, 0 = instant, 100 = slower
--- Per-item original values (fixes cross-weapon override bug)
+-- No Recoil (ShootRecoil만 0으로, 공속 안 건드림)
+-- ============================================================
+local NoRecoilOriginals = getgenv().__MinhoNoRecoilOriginals or {}
+getgenv().__MinhoNoRecoilOriginals = NoRecoilOriginals
+
+local function applyNoRecoil()
+    local ok, lib = pcall(function() return require(ReplicatedStorage.Modules.ItemLibrary) end)
+    if not ok or not lib or type(lib.Items) ~= "table" then return end
+
+    for _, data in pairs(lib.Items) do
+        if type(data) == "table" and type(data.ShootRecoil) == "number" then
+            if NoRecoilOriginals[data] == nil then
+                NoRecoilOriginals[data] = data.ShootRecoil
+            end
+            data.ShootRecoil = 0
+        end
+    end
+
+    local fighter = getFighter()
+    if fighter and type(fighter.Items) == "table" then
+        for _, item in pairs(fighter.Items) do
+            local info = itemField(item, "Info")
+            if type(info) == "table" and type(info.ShootRecoil) == "number" then
+                if NoRecoilOriginals[info] == nil then
+                    NoRecoilOriginals[info] = info.ShootRecoil
+                end
+                info.ShootRecoil = 0
+            end
+        end
+    end
+end
+
+local function revertNoRecoil()
+    for data, orig in pairs(NoRecoilOriginals) do
+        if type(data) == "table" then
+            pcall(function() data.ShootRecoil = orig end)
+        end
+    end
+    NoRecoilOriginals = {}
+    getgenv().__MinhoNoRecoilOriginals = NoRecoilOriginals
+end
+
+RageModule.applyNoRecoil = applyNoRecoil
+RageModule.revertNoRecoil = revertNoRecoil
+
+-- ============================================================
+-- Special Skill Cooldowns (per-item original values)
+-- Slider 75 = original, 0 = fastest (safe floor 0.02s), 100 = slower
 -- ============================================================
 local SPECIAL_BASE = 75
 
@@ -463,7 +508,7 @@ local function applySpecialCooldowns()
                     data.HeavyAttackCooldown = SpecialCooldownOriginals.HeavyAttackCooldown[data]
                 end
             end
-            -- Gun Fire Rate (연사 안전 하한 적용)
+            -- Gun Fire Rate (연사 안전 하한)
             if type(data.ShootCooldown) == 'number' then
                 if SpecialCooldownOriginals.ShootCooldown[data] == nil then
                     SpecialCooldownOriginals.ShootCooldown[data] = data.ShootCooldown
@@ -475,7 +520,7 @@ local function applySpecialCooldowns()
                     data.ShootCooldown = SpecialCooldownOriginals.ShootCooldown[data]
                 end
             end
-            -- Melee Attack Speed (근접 안전 하한 적용)
+            -- Melee Attack Speed (근접 안전 하한)
             if type(data.AttackCooldown) == 'number' then
                 if SpecialCooldownOriginals.AttackCooldown[data] == nil then
                     SpecialCooldownOriginals.AttackCooldown[data] = data.AttackCooldown
@@ -490,7 +535,6 @@ local function applySpecialCooldowns()
         end
     end
 
-    -- 파이터의 실제 아이템 인스턴스에도 반영
     local fighter = getFighter()
     if fighter and type(fighter.Items) == 'table' then
         for _, item in pairs(fighter.Items) do
@@ -858,6 +902,11 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
 
     pcall(applySpecialCooldowns)
 
+    -- No Recoil 활성 시 매 프레임 재적용
+    if safeToggle("NoRecoilEnabled") then
+        pcall(applyNoRecoil)
+    end
+
     local now = os.clock()
     local root = getRoot()
     local hum = getHum()
@@ -1112,6 +1161,21 @@ Underground_Toggle:AddKeyPicker("UndergroundKey", {
 -- ============================================================
 -- Speed Control
 -- ============================================================
+
+-- No Recoil (체크박스만, 슬라이더 없음)
+SCBox:AddCheckbox("NoRecoilEnabled", {
+    Text = "No Recoil",
+    Default = false,
+    Tooltip = "Removes gun recoil (sets ShootRecoil to 0).",
+    Callback = function(Value)
+        if Value then
+            if RageModule.applyNoRecoil then RageModule.applyNoRecoil() end
+        else
+            if RageModule.revertNoRecoil then RageModule.revertNoRecoil() end
+        end
+    end,
+})
+
 SCBox:AddCheckbox("NoSpread", { Text = "No Spread", Default = false })
 
 -- Fire Cooldown (Guns) - toggle + hidden slider
