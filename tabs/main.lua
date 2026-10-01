@@ -1254,18 +1254,11 @@ local OffBox    = Main:AddGroupbox({ Name = "Offsets", Side = 2 })
 local RBox      = Main:AddGroupbox({ Name = "Rage", Side = 2 })
 local SCBox     = Main:AddGroupbox({ Name = "Speed Control", Side = 2 })
 
--- ★ 변경: AddCheckbox → AddToggle + AddKeyPicker (Default = "None")
-local RageEnabledToggle = RageBox:AddToggle("RageEnabled", {
+-- ★ Ragebot Enabled → 체크박스 (키 피커 없음)
+RageBox:AddCheckbox("RageEnabled", {
     Text = "Ragebot Enabled", Default = false,
     Callback = function(v) Config.Enabled = v end,
 })
-RageEnabledToggle:AddKeyPicker("RageEnabledKey", {
-    Text = "Ragebot Toggle",
-    Default = "None",
-    Mode = "Toggle",
-    SyncToggleState = true,
-})
-
 RageBox:AddDropdown("EvasionMode", {
     Text = "Evasion Mode", Values = { "Off", "Lobby", "Random" },
     Default = "Random", Multi = false,
@@ -1276,7 +1269,7 @@ RageBox:AddCheckbox("NotifyEvents", {
     Callback = function(v) Config.NotifyEvents = v end,
 })
 
-WCBox:AddLabel("Priority (top uses first)")
+-- ★ "Priority (top uses first)" 라벨 제거, 드롭다운만 표시
 local ALL_CLASSES = { "Primary", "Secondary", "Melee" }
 local function makeRankDropdown(label, default, key)
     return WCBox:AddDropdown("Rank_" .. key, {
@@ -1325,7 +1318,7 @@ OffBox:AddSlider("SpeedBoost", {
         removeSpeedBoost()
     end })
 
--- ★ 변경: Rage 쪽 토글 → 체크박스 (키 피커 제거)
+-- Rage 쪽: 체크박스
 RBox:AddCheckbox("UEAssistedRage", {
     Text = "UE Assisted Rage", Default = false,
     Callback = function(Value)
