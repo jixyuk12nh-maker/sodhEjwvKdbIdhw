@@ -18,7 +18,7 @@ local Config = {
     EvasionMode = "Random",
     NotifyEvents = true,
     HitAboveY = 0.5,
-    SpeedBoostMult = 0,
+    SpeedBoostMult = 0,   -- ★ 항상 0 고정 (슬라이더 제거)
     Weapons = {
         Priority = { "Primary", "Secondary", "Melee" },
         Enabled  = { Primary = true, Secondary = true, Melee = true, Utility = false },
@@ -752,7 +752,7 @@ end
 RageModule.applySpecialCooldowns = applySpecialCooldowns
 
 -- ============================================================
--- Speed Boost
+-- Speed Boost (항상 0 배율 적용)
 -- ============================================================
 local function applySpeedBoost()
     if speedBoostOriginal ~= nil then return end
@@ -765,7 +765,7 @@ local function applySpeedBoost()
         "Cooldown", "RecoveryTime", "ResetTime", "SwingTime", "SwingDelay",
         "ComboCooldown", "FireCooldown", "ReloadLength",
     }
-    local mult = Config.SpeedBoostMult
+    local mult = Config.SpeedBoostMult  -- 항상 0
     for name, data in pairs(lib.Items) do
         if type(data) == "table" then
             local orig = {}
@@ -1248,12 +1248,11 @@ end)
 -- UI
 -- ============================================================
 local RageBox   = Main:AddGroupbox({ Name = "Ragebot", Side = 1 })
-local WCBox     = Main:AddGroupbox({ Name = "Weapon Config", Side = 1 })
-local WBox      = Main:AddGroupbox({ Name = "Weapon", Side = 1 })
-local OffBox    = Main:AddGroupbox({ Name = "Offsets", Side = 2 })
+local WCBox     = Main:AddGroupbox({ Name = "Weapon Config", Side = 1 })  -- Priority 숨김용으로만 유지
 local RBox      = Main:AddGroupbox({ Name = "Rage", Side = 2 })
 local SCBox     = Main:AddGroupbox({ Name = "Speed Control", Side = 2 })
 
+-- ===== Ragebot 박스 (순서: Enabled → Evasion → Notify → HitAboveY → OnEmptyAmmo → Weapon Types) =====
 RageBox:AddCheckbox("RageEnabled", {
     Text = "Ragebot Enabled", Default = false,
     Callback = function(v) Config.Enabled = v end,
@@ -1267,13 +1266,40 @@ RageBox:AddCheckbox("NotifyEvents", {
     Text = "Event Notifications", Default = true,
     Callback = function(v) Config.NotifyEvents = v end,
 })
+RageBox:AddSlider("HitAboveY", {
+    Text = "Hit Above Y", Default = 0.5, Min = -5, Max = 5,
+    Rounding = 2, Suffix = " studs",
+    Callback = function(v) Config.HitAboveY = v end })
+RageBox:AddDropdown("OnEmptyAmmo", {
+    Text = "On Empty Ammo",
+    Values = { "Swap or Reload", "Reload Only", "Swap Only" },
+    Default = "Swap or Reload", Multi = false,
+    Callback = function(v)
+        if v == "Reload Only" then Config.Weapons.OnEmpty = "Reload"
+        elseif v == "Swap Only" then Config.Weapons.OnEmpty = "Swap"
+        else Config.Weapons.OnEmpty = "SwapOrReload" end
+    end,
+})
+RageBox:AddLabel("Weapon Types to Use")
+RageBox:AddCheckbox("Enabled_Primary", {
+    Text = "Use Primary", Default = true,
+    Callback = function(v) Config.Weapons.Enabled.Primary = v end })
+RageBox:AddCheckbox("Enabled_Secondary", {
+    Text = "Use Secondary", Default = true,
+    Callback = function(v) Config.Weapons.Enabled.Secondary = v end })
+RageBox:AddCheckbox("Enabled_Melee", {
+    Text = "Use Melee", Default = true,
+    Callback = function(v) Config.Weapons.Enabled.Melee = v end })
+RageBox:AddCheckbox("Enabled_Utility", {
+    Text = "Use Utility", Default = false,
+    Callback = function(v) Config.Weapons.Enabled.Utility = v end })
 
--- ★ Priority 드롭다운: 기능은 유지, UI에서만 숨김
+-- ===== Priority 드롭다운: 기능 유지, UI에서만 숨김 =====
 local ALL_CLASSES = { "Primary", "Secondary", "Melee" }
 local function makeRankDropdown(label, default, key)
     return WCBox:AddDropdown("Rank_" .. key, {
         Text = label, Values = ALL_CLASSES, Default = default, Multi = false,
-        Visible = false,   -- 라이브러리가 지원하면 이걸로 숨김
+        Visible = false,
         Callback = function(v) Config.Weapons.Priority[key] = v end,
     })
 end
@@ -1282,7 +1308,6 @@ local rank1 = makeRankDropdown("Priority 1", "Primary", 1)
 local rank2 = makeRankDropdown("Priority 2", "Secondary", 2)
 local rank3 = makeRankDropdown("Priority 3", "Melee", 3)
 
--- 안전장치: 반환 객체에서 UI 프레임을 찾아 Visible = false
 local function hideUIObject(obj)
     if obj == nil or type(obj) ~= "table" then return end
     local candidates = {
@@ -1310,43 +1335,7 @@ hideUIObject(rank1)
 hideUIObject(rank2)
 hideUIObject(rank3)
 
-WCBox:AddLabel("Weapon Types to Use")
-WCBox:AddCheckbox("Enabled_Primary", {
-    Text = "Use Primary", Default = true,
-    Callback = function(v) Config.Weapons.Enabled.Primary = v end })
-WCBox:AddCheckbox("Enabled_Secondary", {
-    Text = "Use Secondary", Default = true,
-    Callback = function(v) Config.Weapons.Enabled.Secondary = v end })
-WCBox:AddCheckbox("Enabled_Melee", {
-    Text = "Use Melee", Default = true,
-    Callback = function(v) Config.Weapons.Enabled.Melee = v end })
-WCBox:AddCheckbox("Enabled_Utility", {
-    Text = "Use Utility", Default = false,
-    Callback = function(v) Config.Weapons.Enabled.Utility = v end })
-
-WBox:AddDropdown("OnEmptyAmmo", {
-    Text = "On Empty Ammo",
-    Values = { "Swap or Reload", "Reload Only", "Swap Only" },
-    Default = "Swap or Reload", Multi = false,
-    Callback = function(v)
-        if v == "Reload Only" then Config.Weapons.OnEmpty = "Reload"
-        elseif v == "Swap Only" then Config.Weapons.OnEmpty = "Swap"
-        else Config.Weapons.OnEmpty = "SwapOrReload" end
-    end,
-})
-
-OffBox:AddSlider("HitAboveY", {
-    Text = "Hit Above Y", Default = 0.5, Min = -5, Max = 5,
-    Rounding = 2, Suffix = " studs",
-    Callback = function(v) Config.HitAboveY = v end })
-OffBox:AddSlider("SpeedBoost", {
-    Text = "Speed Boost Mult (0 = instant)", Default = 0, Min = 0, Max = 1,
-    Rounding = 2,
-    Callback = function(v)
-        Config.SpeedBoostMult = v
-        removeSpeedBoost()
-    end })
-
+-- ===== Rage 박스 =====
 RBox:AddCheckbox("UEAssistedRage", {
     Text = "UE Assisted Rage", Default = false,
     Callback = function(Value)
