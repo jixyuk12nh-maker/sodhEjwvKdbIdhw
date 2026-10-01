@@ -370,8 +370,54 @@ local speedBoostOriginal = getgenv().__MinhoRageSpeedBoost or nil
 getgenv().__MinhoRageSpeedBoost = speedBoostOriginal
 
 -- ============================================================
+-- No Recoil (저장소)
+-- ============================================================
+local NoRecoilOriginals = getgenv().__MinhoNoRecoilOriginals or {}
+getgenv().__MinhoNoRecoilOriginals = NoRecoilOriginals
+
+local function applyNoRecoil()
+    local ok, lib = pcall(function() return require(ReplicatedStorage.Modules.ItemLibrary) end)
+    if not ok or not lib or type(lib.Items) ~= "table" then return end
+
+    for name, data in pairs(lib.Items) do
+        if type(data) == "table" and type(data.ShootRecoil) == "number" then
+            if NoRecoilOriginals[data] == nil then
+                NoRecoilOriginals[data] = data.ShootRecoil
+            end
+            data.ShootRecoil = 0
+        end
+    end
+
+    -- 파이터의 실제 아이템 인스턴스도
+    local fighter = getFighter()
+    if fighter and type(fighter.Items) == "table" then
+        for _, item in pairs(fighter.Items) do
+            local info = itemField(item, "Info")
+            if type(info) == "table" and type(info.ShootRecoil) == "number" then
+                if NoRecoilOriginals[info] == nil then
+                    NoRecoilOriginals[info] = info.ShootRecoil
+                end
+                info.ShootRecoil = 0
+            end
+        end
+    end
+end
+
+local function revertNoRecoil()
+    for data, orig in pairs(NoRecoilOriginals) do
+        if type(data) == "table" then
+            pcall(function() data.ShootRecoil = orig end)
+        end
+    end
+    NoRecoilOriginals = {}
+    getgenv().__MinhoNoRecoilOriginals = NoRecoilOriginals
+end
+
+RageModule.applyNoRecoil = applyNoRecoil
+RageModule.revertNoRecoil = revertNoRecoil
+
+-- ============================================================
 -- Special Skill Cooldowns
--- Slider 75 = original, 0 = instant, 100 = slower
 -- ============================================================
 local SPECIAL_BASE = 75
 
@@ -842,6 +888,11 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
 
     pcall(applySpecialCooldowns)
 
+    -- No Recoil 체크되어 있으면 매 프레임 재적용 (게임이 되돌릴 경우 대비)
+    if safeToggle("NoRecoilEnabled") then
+        pcall(applyNoRecoil)
+    end
+
     local now = os.clock()
     local root = getRoot()
     local hum = getHum()
@@ -1096,25 +1147,19 @@ Underground_Toggle:AddKeyPicker("UndergroundKey", {
 -- ============================================================
 -- Speed Control
 -- ============================================================
-SCBox:AddCheckbox("Recoil", {
-    Text = "Recoil", Default = false,
+
+-- No Recoil (토글만, 슬라이더 없음)
+SCBox:AddCheckbox("NoRecoilEnabled", {
+    Text = "No Recoil",
+    Default = false,
+    Tooltip = "Removes gun recoil (sets ShootRecoil to 0).",
     Callback = function(Value)
         if Value then
-            Config.SpeedBoostMult = 0
-            local ok, lib = pcall(function() return require(ReplicatedStorage.Modules.ItemLibrary) end)
-            if ok and lib and lib.Items then
-                for name, data in pairs(lib.Items) do
-                    if type(data) == "table" then
-                        if data.ShootSpread  then data.ShootSpread  = 0 end
-                        if data.ShootAccuracy then data.ShootAccuracy = 0 end
-                        if data.ShootRecoil  then data.ShootRecoil  = 0 end
-                        if data.ShootCooldown then data.ShootCooldown = 0.001 end
-                        if data.ShootBurstCooldown then data.ShootBurstCooldown = 0.001 end
-                    end
-                end
-            end
+            if RageModule.applyNoRecoil then RageModule.applyNoRecoil() end
+        else
+            if RageModule.revertNoRecoil then RageModule.revertNoRecoil() end
         end
-    end
+    end,
 })
 
 SCBox:AddCheckbox("NoSpread", { Text = "No Spread", Default = false })
