@@ -370,7 +370,7 @@ local speedBoostOriginal = getgenv().__MinhoRageSpeedBoost or nil
 getgenv().__MinhoRageSpeedBoost = speedBoostOriginal
 
 -- ============================================================
--- No Spread (raycast 강제) - 토글 가능 (원본 upvalue 저장/복원)
+-- No Spread
 -- ============================================================
 local NoSpreadState = {
     Hooked = false,
@@ -1254,7 +1254,6 @@ local OffBox    = Main:AddGroupbox({ Name = "Offsets", Side = 2 })
 local RBox      = Main:AddGroupbox({ Name = "Rage", Side = 2 })
 local SCBox     = Main:AddGroupbox({ Name = "Speed Control", Side = 2 })
 
--- ★ Ragebot Enabled → 체크박스 (키 피커 없음)
 RageBox:AddCheckbox("RageEnabled", {
     Text = "Ragebot Enabled", Default = false,
     Callback = function(v) Config.Enabled = v end,
@@ -1269,17 +1268,47 @@ RageBox:AddCheckbox("NotifyEvents", {
     Callback = function(v) Config.NotifyEvents = v end,
 })
 
--- ★ "Priority (top uses first)" 라벨 제거, 드롭다운만 표시
+-- ★ Priority 드롭다운: 기능은 유지, UI에서만 숨김
 local ALL_CLASSES = { "Primary", "Secondary", "Melee" }
 local function makeRankDropdown(label, default, key)
     return WCBox:AddDropdown("Rank_" .. key, {
         Text = label, Values = ALL_CLASSES, Default = default, Multi = false,
+        Visible = false,   -- 라이브러리가 지원하면 이걸로 숨김
         Callback = function(v) Config.Weapons.Priority[key] = v end,
     })
 end
-makeRankDropdown("Priority 1", "Primary", 1)
-makeRankDropdown("Priority 2", "Secondary", 2)
-makeRankDropdown("Priority 3", "Melee", 3)
+
+local rank1 = makeRankDropdown("Priority 1", "Primary", 1)
+local rank2 = makeRankDropdown("Priority 2", "Secondary", 2)
+local rank3 = makeRankDropdown("Priority 3", "Melee", 3)
+
+-- 안전장치: 반환 객체에서 UI 프레임을 찾아 Visible = false
+local function hideUIObject(obj)
+    if obj == nil or type(obj) ~= "table" then return end
+    local candidates = {
+        obj.Frame, obj.Container, obj.Object, obj.Title,
+        obj.UIElements, obj.Holder, obj.HolderFrame, obj.Background,
+    }
+    for _, c in ipairs(candidates) do
+        if c ~= nil then
+            if type(c) == "table" then
+                for _, e in pairs(c) do
+                    if type(e) == "table" and e.Visible ~= nil then
+                        pcall(function() e.Visible = false end)
+                    elseif typeof(e) == "Instance" and e:IsA("GuiObject") then
+                        pcall(function() e.Visible = false end)
+                    end
+                end
+            elseif typeof(c) == "Instance" and c:IsA("GuiObject") then
+                pcall(function() c.Visible = false end)
+            end
+        end
+    end
+end
+
+hideUIObject(rank1)
+hideUIObject(rank2)
+hideUIObject(rank3)
 
 WCBox:AddLabel("Weapon Types to Use")
 WCBox:AddCheckbox("Enabled_Primary", {
@@ -1318,7 +1347,6 @@ OffBox:AddSlider("SpeedBoost", {
         removeSpeedBoost()
     end })
 
--- Rage 쪽: 체크박스
 RBox:AddCheckbox("UEAssistedRage", {
     Text = "UE Assisted Rage", Default = false,
     Callback = function(Value)
