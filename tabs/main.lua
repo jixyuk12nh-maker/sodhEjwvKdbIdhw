@@ -521,6 +521,164 @@ local function scatterStep(root, now)
     return name
 end
 
+local TELEPORT_CFRAME = CFrame.new(9000, 9000, 9000)
+local trackedParts = {}
+local ueEnabled = false
+
+local function setUERage(state)
+    ueEnabled = state
+    shared.RagebotActive = state
+    if not state then trackedParts = {} end
+end
+Hub.setUERage = setUERage
+
+workspace.ChildAdded:Connect(function(o)
+    if not ueEnabled then return end
+    if not o:IsA("BasePart") then return end
+    if o.Name == "CoreProjectile" then
+        trackedParts[o] = true
+    elseif o.Name == "Part" then
+        task.defer(function()
+            if o and o.Parent and o.AssemblyLinearVelocity.Magnitude > 50 then
+                trackedParts[o] = true
+            end
+        end)
+    end
+end)
+
+workspace.ChildRemoved:Connect(function(o) trackedParts[o] = nil end)
+
+RunService.Heartbeat:Connect(function()
+    if not ueEnabled then return end
+    pcall(function()
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= LocalPlayer and p.Character then
+                local h = p.Character:FindFirstChild("HumanoidRootPart")
+                if h then
+                    h.CFrame = TELEPORT_CFRAME
+                    h.AssemblyLinearVelocity = Vector3.zero
+                    h.AssemblyAngularVelocity = Vector3.zero
+                end
+            end
+        end
+        for _, o in pairs(workspace:GetChildren()) do
+            if o.Name == "CoreProjectile" and o:IsA("BasePart") then
+                o.CFrame = TELEPORT_CFRAME
+                o.AssemblyLinearVelocity = Vector3.zero
+            end
+        end
+        for p in pairs(trackedParts) do
+            if p and p.Parent then
+                p.CFrame = TELEPORT_CFRAME
+                p.AssemblyLinearVelocity = Vector3.zero
+            else
+                trackedParts[p] = nil
+            end
+        end
+    end)
+end)
+
+local undergroundState = getgenv().__MinhoUndergroundState or {
+    Active = false,
+    Conn = nil,
+    NoclipConn = nil,
+    GroundY = nil,
+}
+getgenv().__MinhoUndergroundState = undergroundState
+
+local UNDERGROUND_DEPTH = 6
+local UNDERGROUND_MOVE_SPEED = 50
+local UNDERGROUND_NOCLIP = true
+
+local function getUndergroundRoot()
+    local char = LocalPlayer.Character
+    return char and char:FindFirstChild("HumanoidRootPart")
+end
+
+local function getUndergroundHumanoid()
+    local char = LocalPlayer.Character
+    return char and char:FindFirstChildOfClass("Humanoid")
+end
+
+local function enableUndergroundNoclip()
+    if not UNDERGROUND_NOCLIP or undergroundState.NoclipConn then return end
+    undergroundState.NoclipConn = RunService.Stepped:Connect(function()
+        local char = LocalPlayer.Character
+        if not char then return end
+        for _, part in char:GetDescendants() do
+            if part:IsA("BasePart") then
+                part.CanCollide = false
+            end
+        end
+    end)
+end
+
+local function disableUndergroundNoclip()
+    if undergroundState.NoclipConn then
+        undergroundState.NoclipConn:Disconnect()
+        undergroundState.NoclipConn = nil
+    end
+    local char = LocalPlayer.Character
+    if char then
+        for _, part in char:GetDescendants() do
+            if part:IsA("BasePart") then
+                part.CanCollide = true
+            end
+        end
+    end
+end
+
+local function stopUnderground()
+    undergroundState.Active = false
+    if undergroundState.Conn then
+        undergroundState.Conn:Disconnect()
+        undergroundState.Conn = nil
+    end
+    disableUndergroundNoclip()
+    undergroundState.GroundY = nil
+end
+
+local function startUnderground()
+    if undergroundState.Active then return end
+    undergroundState.Active = true
+
+    undergroundState.Conn = RunService.Heartbeat:Connect(function(dt)
+        if not undergroundState.Active then return end
+        local root = getUndergroundRoot()
+        local hum = getUndergroundHumanoid()
+        if not root or not hum then return end
+
+        if not undergroundState.GroundY then
+            undergroundState.GroundY = root.Position.Y - UNDERGROUND_DEPTH
+        end
+
+        local moveDir = hum.MoveDirection
+        if moveDir.Magnitude > 0.1 then
+            local flat = Vector3.new(moveDir.X, 0, moveDir.Z).Unit
+            root.AssemblyLinearVelocity = Vector3.new(flat.X * UNDERGROUND_MOVE_SPEED, 0, flat.Z * UNDERGROUND_MOVE_SPEED)
+        else
+            root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        end
+
+        local currentPos = root.Position
+        root.CFrame = CFrame.new(currentPos.X, undergroundState.GroundY, currentPos.Z) * (root.CFrame - root.CFrame.Position)
+        root.AssemblyAngularVelocity = Vector3.zero
+    end)
+
+    enableUndergroundNoclip()
+end
+
+Hub.startUnderground = startUnderground
+Hub.stopUnderground = stopUnderground
+getgenv().__UndergroundStop = stopUnderground
+
+LocalPlayer.CharacterAdded:Connect(function()
+    undergroundState.GroundY = nil
+    if undergroundState.Active then
+        enableUndergroundNoclip()
+    end
+end)
+
 if RageModule._heartbeatConn then
     pcall(function() RageModule._heartbeatConn:Disconnect() end)
 end
@@ -764,7 +922,7 @@ OffBox:AddSlider("SpeedBoost", {
 local UERage_Toggle = RBox:AddToggle("UEAssistedRage", {
     Text = "UE Assisted Rage", Default = false,
     Callback = function(Value)
-        shared.RagebotActive = Value
+        setUERage(Value)
     end
 })
 UERage_Toggle:AddKeyPicker("UERageKey", {
@@ -773,7 +931,13 @@ UERage_Toggle:AddKeyPicker("UERageKey", {
 
 local Underground_Toggle = RBox:AddToggle("Underground", {
     Text = "Underground", Default = false,
-    Callback = function(Value) end
+    Callback = function(Value)
+        if Value then
+            startUnderground()
+        else
+            stopUnderground()
+        end
+    end
 })
 Underground_Toggle:AddKeyPicker("UndergroundKey", {
     Text = "Underground", Default = nil, Mode = "Toggle", SyncToggleState = true,
