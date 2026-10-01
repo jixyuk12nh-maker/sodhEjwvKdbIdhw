@@ -370,7 +370,210 @@ local speedBoostOriginal = getgenv().__MinhoRageSpeedBoost or nil
 getgenv().__MinhoRageSpeedBoost = speedBoostOriginal
 
 -- ============================================================
--- No Recoil (ShootRecoil만 0으로, 공속 안 건드림)
+-- No Spread (raycast 강제) - 토글 가능 (원본 upvalue 저장/복원)
+-- ============================================================
+local NoSpreadState = {
+    Hooked = false,
+    -- 원본 upvalue 참조 저장
+    Method = nil,        -- ClientItem.Input 함수
+    Index = nil,         -- 숫자 인덱스 or {bundle = table, key = any}
+    Original = nil,      -- 원본 ReplicatedStorage 참조
+    Dummy = nil,         -- 교체된 dummy
+    Bindings = nil,      -- packet handler 목록
+}
+
+local function NoSpread_Load()
+    if NoSpreadState.Hooked then return true end
+
+    -- Executor 지원 확인
+    if not (setrawmetatable and clonefunction and debug.getupvalues and debug.setupvalue and getgc) then
+        return false
+    end
+
+    local RS = ReplicatedStorage
+    local LP = LocalPlayer
+
+    -- UseItem Remote
+    local remote
+    do
+        local r = RS:FindFirstChild('Remotes')
+        local rp = r and r:FindFirstChild('Replication')
+        local f = rp and rp:FindFirstChild('Fighter')
+        remote = f and f:FindFirstChild('UseItem')
+    end
+    if not (remote and remote:IsA('RemoteEvent')) then return false end
+
+    -- ClientItem 모듈
+    local clientItem
+    do
+        local ps = LP:FindFirstChild('PlayerScripts')
+        local md = ps and ps:FindFirstChild('Modules')
+        local cr = md and md:FindFirstChild('ClientReplicatedClasses')
+        local cf = cr and cr:FindFirstChild('ClientFighter')
+        local ci = cf and cf:FindFirstChild('ClientItem')
+        if ci then local ok, v = pcall(require, ci); if ok then clientItem = v end end
+    end
+    if type(clientItem) ~= 'table' then return false end
+
+    -- EnumLibrary._from_enum
+    local fromEnum
+    do
+        local md = RS:FindFirstChild('Modules')
+        local el = md and md:FindFirstChild('EnumLibrary')
+        if el then local ok, v = pcall(require, el); if ok then fromEnum = rawget(v, '_from_enum') end end
+    end
+    if type(fromEnum) ~= 'table' then return false end
+
+    -- FighterController (getgc)
+    local fighterController
+    local function LocalFighter()
+        if not fighterController then
+            for _, m in ipairs(getgc(true)) do
+                if type(m) == 'table' and rawget(m, 'LocalFighter') and rawget(m, 'Objects') then
+                    fighterController = m; break
+                end
+            end
+        end
+        return fighterController and rawget(fighterController, 'LocalFighter')
+    end
+
+    local function GetItemById(id)
+        local f = LocalFighter()
+        local items = type(f) == 'table' and rawget(f, 'Items') or nil
+        if type(items) ~= 'table' then return nil end
+        for _, it in next, items do
+            local d = rawget(it, 'Data')
+            if d and rawget(d, 'ObjectID') == id then return it end
+        end
+    end
+
+    local dummy = Color3.new()
+    local fireNative = clonefunction(Instance.new('RemoteEvent').FireServer)
+    local bindings = {}
+
+    local function Dispatch(packet)
+        for _, b in ipairs(bindings) do
+            if b.enabled and b.handler then
+                b.handler(packet)
+                if packet.block then break end
+            end
+        end
+    end
+
+    local remoteTree = {
+        Replication = {
+            Fighter = {
+                UseItem = {
+                    FireServer = function(_, objectId, encType, args)
+                        local packet = {
+                            block = false,
+                            objectId = objectId,
+                            type = rawget(fromEnum, encType),
+                            args = args,
+                        }
+                        Dispatch(packet)
+                        if packet.block then return end
+                        return fireNative(remote, objectId, encType, args, nil)
+                    end,
+                },
+            },
+        },
+    }
+
+    setrawmetatable(dummy, { __index = function() return remoteTree end })
+
+    -- Hook: 원본 upvalue 저장 + dummy로 교체
+    local inputMethod = rawget(clientItem, 'Input')
+    if not inputMethod then return false end
+
+    local foundIndex = nil
+    local foundOriginal = nil
+
+    for i, v in pairs(debug.getupvalues(inputMethod)) do
+        if typeof(v) == 'Instance' and v == RS then
+            foundIndex = i
+            foundOriginal = v
+            break
+        end
+    end
+
+    if foundIndex == nil then
+        for _, bundle in pairs(debug.getupvalues(inputMethod)) do
+            if type(bundle) == 'table' then
+                for k, v in pairs(bundle) do
+                    if typeof(v) == 'Instance' and v == RS then
+                        foundIndex = { bundle = bundle, key = k }
+                        foundOriginal = v
+                        break
+                    end
+                end
+                if foundIndex then break end
+            end
+        end
+    end
+
+    if foundIndex == nil then return false end
+
+    -- 교체 실행
+    if type(foundIndex) == "table" then
+        foundIndex.bundle[foundIndex.key] = dummy
+    else
+        debug.setupvalue(inputMethod, foundIndex, dummy)
+    end
+
+    -- No Spread 핸들러 등록
+    table.insert(bindings, {
+        enabled = true,
+        handler = function(packet)
+            if packet.type ~= 'StartShooting' then return end
+            local item = GetItemById(packet.objectId)
+            if not item then return end
+            if rawget(rawget(item, 'Info'), 'Type') == 'Gun' then
+                packet.args['\2'] = true
+            end
+        end,
+    })
+
+    -- 상태 저장
+    NoSpreadState.Method = inputMethod
+    NoSpreadState.Index = foundIndex
+    NoSpreadState.Original = foundOriginal
+    NoSpreadState.Dummy = dummy
+    NoSpreadState.Bindings = bindings
+    NoSpreadState.Hooked = true
+    return true
+end
+
+local function NoSpread_Unload()
+    if not NoSpreadState.Hooked then return end
+
+    local inputMethod = NoSpreadState.Method
+    local index = NoSpreadState.Index
+    local original = NoSpreadState.Original
+
+    if inputMethod and index and original then
+        if type(index) == "table" then
+            pcall(function() index.bundle[index.key] = original end)
+        else
+            pcall(function() debug.setupvalue(inputMethod, index, original) end)
+        end
+    end
+
+    -- 상태 초기화
+    NoSpreadState.Hooked = false
+    NoSpreadState.Method = nil
+    NoSpreadState.Index = nil
+    NoSpreadState.Original = nil
+    NoSpreadState.Dummy = nil
+    NoSpreadState.Bindings = nil
+    return true
+end
+
+RageModule.NoSpread_Load = NoSpread_Load
+RageModule.NoSpread_Unload = NoSpread_Unload
+
+-- ============================================================
+-- No Recoil
 -- ============================================================
 local NoRecoilOriginals = getgenv().__MinhoNoRecoilOriginals or {}
 getgenv().__MinhoNoRecoilOriginals = NoRecoilOriginals
@@ -416,8 +619,7 @@ RageModule.applyNoRecoil = applyNoRecoil
 RageModule.revertNoRecoil = revertNoRecoil
 
 -- ============================================================
--- Special Skill Cooldowns (per-item original values)
--- Slider 75 = original, 0 = fastest (safe floor 0.02s), 100 = slower
+-- Special Skill Cooldowns
 -- ============================================================
 local SPECIAL_BASE = 75
 
@@ -458,13 +660,11 @@ local function applySpecialCooldowns()
     local meleeOn   = safeToggle("MeleeCooldownEnabled")
     local meleeVal  = safeOption("MeleeCooldownSlider", SPECIAL_BASE)
 
-    -- 안전 하한값 (초당 50발)
     local GUN_MIN = 0.02
     local MELEE_MIN = 0.02
 
     for _, data in pairs(lib.Items) do
         if type(data) == 'table' then
-            -- Scythe Dash
             if type(data.DashCooldown) == 'number' then
                 if SpecialCooldownOriginals.DashCooldown[data] == nil then
                     SpecialCooldownOriginals.DashCooldown[data] = data.DashCooldown
@@ -475,7 +675,6 @@ local function applySpecialCooldowns()
                     data.DashCooldown = SpecialCooldownOriginals.DashCooldown[data]
                 end
             end
-            -- Battle Axe Spin
             if type(data.SpinCooldown) == 'number' then
                 if SpecialCooldownOriginals.SpinCooldown[data] == nil then
                     SpecialCooldownOriginals.SpinCooldown[data] = data.SpinCooldown
@@ -486,7 +685,6 @@ local function applySpecialCooldowns()
                     data.SpinCooldown = SpecialCooldownOriginals.SpinCooldown[data]
                 end
             end
-            -- Katana Deflect
             if type(data.DeflectCooldown) == 'number' then
                 if SpecialCooldownOriginals.DeflectCooldown[data] == nil then
                     SpecialCooldownOriginals.DeflectCooldown[data] = data.DeflectCooldown
@@ -497,7 +695,6 @@ local function applySpecialCooldowns()
                     data.DeflectCooldown = SpecialCooldownOriginals.DeflectCooldown[data]
                 end
             end
-            -- Knife Heavy
             if type(data.HeavyAttackCooldown) == 'number' then
                 if SpecialCooldownOriginals.HeavyAttackCooldown[data] == nil then
                     SpecialCooldownOriginals.HeavyAttackCooldown[data] = data.HeavyAttackCooldown
@@ -508,7 +705,6 @@ local function applySpecialCooldowns()
                     data.HeavyAttackCooldown = SpecialCooldownOriginals.HeavyAttackCooldown[data]
                 end
             end
-            -- Gun Fire Rate (연사 안전 하한)
             if type(data.ShootCooldown) == 'number' then
                 if SpecialCooldownOriginals.ShootCooldown[data] == nil then
                     SpecialCooldownOriginals.ShootCooldown[data] = data.ShootCooldown
@@ -520,7 +716,6 @@ local function applySpecialCooldowns()
                     data.ShootCooldown = SpecialCooldownOriginals.ShootCooldown[data]
                 end
             end
-            -- Melee Attack Speed (근접 안전 하한)
             if type(data.AttackCooldown) == 'number' then
                 if SpecialCooldownOriginals.AttackCooldown[data] == nil then
                     SpecialCooldownOriginals.AttackCooldown[data] = data.AttackCooldown
@@ -902,7 +1097,6 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
 
     pcall(applySpecialCooldowns)
 
-    -- No Recoil 활성 시 매 프레임 재적용
     if safeToggle("NoRecoilEnabled") then
         pcall(applyNoRecoil)
     end
@@ -1162,7 +1356,6 @@ Underground_Toggle:AddKeyPicker("UndergroundKey", {
 -- Speed Control
 -- ============================================================
 
--- No Recoil (체크박스만, 슬라이더 없음)
 SCBox:AddCheckbox("NoRecoilEnabled", {
     Text = "No Recoil",
     Default = false,
@@ -1176,9 +1369,30 @@ SCBox:AddCheckbox("NoRecoilEnabled", {
     end,
 })
 
-SCBox:AddCheckbox("NoSpread", { Text = "No Spread", Default = false })
+SCBox:AddCheckbox("NoSpread", {
+    Text = "No Spread",
+    Default = false,
+    Tooltip = "Forces raycast shots (removes bullet spread).",
+    Callback = function(Value)
+        if Value then
+            local ok = RageModule.NoSpread_Load and RageModule.NoSpread_Load()
+            if not ok then
+                if Library and Library.Notify then
+                    Library:Notify({
+                        Title = "No Spread",
+                        Description = "Executor missing required functions (setrawmetatable / getgc / debug)",
+                        Time = 5,
+                    })
+                end
+            end
+        else
+            if RageModule.NoSpread_Unload then
+                RageModule.NoSpread_Unload()
+            end
+        end
+    end,
+})
 
--- Fire Cooldown (Guns) - toggle + hidden slider
 SCBox:AddCheckbox("FireCooldownEnabled", {
     Text = "Fire Cooldown (Guns)",
     Default = false,
@@ -1196,7 +1410,6 @@ FireCooldownBox:AddSlider("FireCooldownSlider", {
 })
 FireCooldownBox:SetupDependencies({ { Toggles.FireCooldownEnabled, true } })
 
--- Melee Cooldown (Melee) - toggle + hidden slider
 SCBox:AddCheckbox("MeleeCooldownEnabled", {
     Text = "Melee Cooldown (Melee)",
     Default = false,
@@ -1214,7 +1427,6 @@ MeleeCooldownBox:AddSlider("MeleeCooldownSlider", {
 })
 MeleeCooldownBox:SetupDependencies({ { Toggles.MeleeCooldownEnabled, true } })
 
--- Scythe Dash
 SCBox:AddCheckbox("ScytheDashToggle", {
     Text = "Scythe Dash",
     Default = false,
@@ -1232,7 +1444,6 @@ ScytheDashBox:AddSlider("ScytheDashSlider", {
 })
 ScytheDashBox:SetupDependencies({ { Toggles.ScytheDashToggle, true } })
 
--- Battle Axe Spin
 SCBox:AddCheckbox("AxeSpinToggle", {
     Text = "Battle Axe Dash",
     Default = false,
@@ -1250,7 +1461,6 @@ AxeSpinBox:AddSlider("AxeSpinSlider", {
 })
 AxeSpinBox:SetupDependencies({ { Toggles.AxeSpinToggle, true } })
 
--- Katana Deflect
 SCBox:AddCheckbox("KatanaDeflectToggle", {
     Text = "Katana Deflect",
     Default = false,
@@ -1268,7 +1478,6 @@ KatanaDeflectBox:AddSlider("KatanaDeflectSlider", {
 })
 KatanaDeflectBox:SetupDependencies({ { Toggles.KatanaDeflectToggle, true } })
 
--- Knife Heavy
 SCBox:AddCheckbox("KnifeHeavyToggle", {
     Text = "Knife Heavy Attack",
     Default = false,
@@ -1292,4 +1501,4 @@ task.defer(function()
     end
 end)
 
-return true
+return nil
