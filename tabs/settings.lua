@@ -1,113 +1,102 @@
-run(function()
-    local AutoLoad, Loadout
-    local AutoSelect
-    local Mode, Mode2, Mode3, Mode4
-    local loadoutLoopRunning = false
+--!nonstrict
+local Hub = _G.MinhoHub
+if not Hub then return end
 
-    local StarterPlayer = cloneref(game:GetService('StarterPlayer'))
+local Settings = Hub.Tabs.Settings
+local LocalPlayer = Hub.LocalPlayer
 
-    local weaponsFolder = StarterPlayer.StarterPlayerScripts.Assets.ViewModels.Weapons
-    local unobtainableFolder = weaponsFolder.Unobtainable
+local AUTOEXEC_PATH = "MinhoHub/autoexec.json"
 
-    local weaponList = {}
+local function ensureFolder()
+    if not (isfolder and makefolder) then return end
+    if not isfolder("MinhoHub") then
+        pcall(makefolder, "MinhoHub")
+    end
+end
 
-    for _,v in pairs(weaponsFolder:GetChildren()) do
-        if v:IsA("Model") then
-            table.insert(weaponList, v.Name)
+local function loadAutoExecFlag()
+    if not (isfile and readfile) then return false end
+    if not isfile(AUTOEXEC_PATH) then return false end
+    local ok, data = pcall(function()
+        return game:GetService("HttpService"):JSONDecode(readfile(AUTOEXEC_PATH))
+    end)
+    if ok and type(data) == "table" and data.enabled == true then
+        return true
+    end
+    return false
+end
+
+local function saveAutoExecFlag(enabled)
+    if not writefile then return end
+    ensureFolder()
+    pcall(function()
+        writefile(AUTOEXEC_PATH, game:GetService("HttpService"):JSONEncode({ enabled = enabled == true }))
+    end)
+end
+
+local function runAutoLoad()
+    if Hub.Modules and Hub.Modules["auto load"] then
+        local mod = Hub.Modules["auto load"]
+        if mod.Toggle then
+            pcall(function() mod:Toggle(true) end)
         end
     end
+end
 
-    for _,v in pairs(unobtainableFolder:GetChildren()) do
-        if v:IsA("Model") then
-            table.insert(weaponList, v.Name)
+local SettingsBox = Settings:AddGroupbox({ Name = "Keybinds", Side = 1 })
+
+SettingsBox:AddCheckbox("ShowKeybindsWindow", {
+    Text = "Show Keybinds Window",
+    Default = false,
+    Callback = function(Value)
+        if Hub.Library.KeybindFrame then
+            Hub.Library.KeybindFrame.Visible = Value
         end
     end
+})
 
-    local function pickLoadout()
-        local args = {{
-            Mode.Value,
-            Mode2.Value,
-            Mode3.Value,
-            Mode4.Value
-        }}
-
-        ReplicatedStorage.Remotes.Replication.Fighter.PickWeapons:FireServer(unpack(args))
-    end
-
-    local function runLoadoutLoop(active)
-        if active then
-            if loadoutLoopRunning then return end
-            loadoutLoopRunning = true
-            task.spawn(function()
-                while (AutoLoad and AutoLoad.Enabled) or (AutoSelect and AutoSelect.Enabled) do
-                    pcall(pickLoadout)
-                    task.wait(0.5)
-                end
-                loadoutLoopRunning = false
-            end)
+SettingsBox:AddCheckbox("AutoExecute", {
+    Text = "Auto Execute",
+    Default = false,
+    Callback = function(Value)
+        saveAutoExecFlag(Value)
+        if Value then
+            runAutoLoad()
         end
     end
+})
 
-    AutoLoad = Other:AddModule({
-        Name = "auto load",
-        Function = function(callback)
-            runLoadoutLoop(callback)
-        end
-    })
+if Hub.SaveManager then
+    Hub.SaveManager:SetLibrary(Hub.Library)
+    Hub.SaveManager:BuildConfigSection(Settings, "folder-cog")
+    Hub.SaveManager:LoadAutoloadConfig()
+end
 
-    Loadout = Other:AddModule({
-        Name = "loadout",
-        HideEnabled = true
-    })
+if loadAutoExecFlag() then
+    task.defer(function()
+        task.wait(1)
+        runAutoLoad()
+    end)
+end
 
-    AutoSelect = Loadout:AddToggle({
-        Name = "auto select",
-        Function = function(callback)
-            runLoadoutLoop(callback)
-        end
-    })
-
-    Mode = Loadout:AddDropdown2({
-        Name = "primary",
-        List = weaponList,
-        Default = "Assault Rifle",
-        Function = function()
-            if not (AutoLoad and AutoLoad.Enabled) and not (AutoSelect and AutoSelect.Enabled) then
-                pcall(pickLoadout)
+LocalPlayer.AncestryChanged:Connect(function()
+    if not LocalPlayer:IsDescendantOf(game) then
+        if Hub.stopNoclip then pcall(Hub.stopNoclip) end
+        if Hub.cleanupFly then pcall(Hub.cleanupFly) end
+        if Hub.stopThirdPerson then pcall(Hub.stopThirdPerson) end
+        if Hub.stopAnimation then pcall(Hub.stopAnimation) end
+        if Hub.uninstallKillSoundSystem then pcall(Hub.uninstallKillSoundSystem) end
+        if Hub.uninstallHitSound then pcall(Hub.uninstallHitSound) end
+        if Hub.stopUnderground then pcall(Hub.stopUnderground) end
+        pcall(function()
+            if Hub.RageModule and Hub.RageModule.destroyScatterBody then
+                Hub.RageModule.destroyScatterBody()
             end
-        end
-    })
-
-    Mode2 = Loadout:AddDropdown2({
-        Name = "secondary",
-        List = weaponList,
-        Default = "Handgun",
-        Function = function()
-            if not (AutoLoad and AutoLoad.Enabled) and not (AutoSelect and AutoSelect.Enabled) then
-                pcall(pickLoadout)
+            if Hub.RageModule and Hub.RageModule.removeSpeedBoost then
+                Hub.RageModule.removeSpeedBoost()
             end
-        end
-    })
-
-    Mode3 = Loadout:AddDropdown2({
-        Name = "melee",
-        List = weaponList,
-        Default = "Fists",
-        Function = function()
-            if not (AutoLoad and AutoLoad.Enabled) and not (AutoSelect and AutoSelect.Enabled) then
-                pcall(pickLoadout)
-            end
-        end
-    })
-
-    Mode4 = Loadout:AddDropdown2({
-        Name = "utility",
-        List = weaponList,
-        Default = "Grenade",
-        Function = function()
-            if not (AutoLoad and AutoLoad.Enabled) and not (AutoSelect and AutoSelect.Enabled) then
-                pcall(pickLoadout)
-            end
-        end
-    })
+        end)
+    end
 end)
+
+return true
