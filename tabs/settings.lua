@@ -5,6 +5,44 @@ if not Hub then return end
 local Settings = Hub.Tabs.Settings
 local LocalPlayer = Hub.LocalPlayer
 
+local AUTOEXEC_PATH = "MinhoHub/autoexec.json"
+
+local function loadAutoExecState()
+    if not (isfile and readfile) then return {} end
+    if not isfile(AUTOEXEC_PATH) then return {} end
+    local ok, data = pcall(function()
+        return game:GetService("HttpService"):JSONDecode(readfile(AUTOEXEC_PATH))
+    end)
+    return ok and type(data) == "table" and data or {}
+end
+
+local function saveAutoExecState()
+    if not writefile then return end
+    local enabled = {}
+    if Hub.Library and Hub.Library.Toggles then
+        for name, toggle in pairs(Hub.Library.Toggles) do
+            if type(toggle) == "table" and toggle.Value == true then
+                enabled[name] = true
+            end
+        end
+    end
+    pcall(function()
+        writefile(AUTOEXEC_PATH, game:GetService("HttpService"):JSONEncode(enabled))
+    end)
+end
+
+local function applyAutoExecState()
+    local state = loadAutoExecState()
+    if not next(state) then return end
+    if not Hub.Library or not Hub.Library.Toggles then return end
+    for name, _ in pairs(state) do
+        local toggle = Hub.Library.Toggles[name]
+        if type(toggle) == "table" and toggle.SetValue then
+            pcall(function() toggle:SetValue(true) end)
+        end
+    end
+end
+
 local SettingsBox = Settings:AddGroupbox({ Name = "Keybinds", Side = 1 })
 
 SettingsBox:AddCheckbox("ShowKeybindsWindow", {
@@ -17,71 +55,39 @@ SettingsBox:AddCheckbox("ShowKeybindsWindow", {
     end
 })
 
---============================================================--
--- AUTO LOAD + SILENT LOAD (Keybinds 그룹박스 안)
---============================================================--
-
--- SILENT LOAD: UI 조용히 숨김
-if Hub.Library and Hub.Library.Window and Hub.Library.Window.MainFrame then
-    Hub.Library.Window.MainFrame.Visible = false
-    if Hub.Library.Toggled then
-        Hub.Library.Toggled = false
+SettingsBox:AddCheckbox("AutoExecute", {
+    Text = "Auto Execute",
+    Default = false,
+    Callback = function(Value)
+        if Value then
+            saveAutoExecState()
+            if Hub.Library and Hub.Library.Toggles then
+                for _, toggle in pairs(Hub.Library.Toggles) do
+                    if type(toggle) == "table" and toggle.ValueChanged then
+                        toggle.ValueChanged:Connect(function()
+                            task.delay(0.5, saveAutoExecState)
+                        end)
+                    end
+                end
+            end
+        else
+            if delfile and isfile and isfile(AUTOEXEC_PATH) then
+                pcall(delfile, AUTOEXEC_PATH)
+            end
+        end
     end
-end
+})
 
--- AUTO LOAD: 저장된 설정 자동 로드
+task.spawn(function()
+    task.wait(1)
+    applyAutoExecState()
+end)
+
 if Hub.SaveManager then
     Hub.SaveManager:SetLibrary(Hub.Library)
     Hub.SaveManager:BuildConfigSection(Settings, "folder-cog")
     Hub.SaveManager:LoadAutoloadConfig()
 end
-
--- AUTO EXECUTE: autoexec 폴더 스크립트 자동 실행
-do
-    local AUTOEXEC_FOLDER = "MinhoHub/autoexec"
-
-    local function ensureFolder(path)
-        if not (isfolder and makefolder) then return false end
-        if not isfolder(path) then
-            local segments = path:split("/")
-            local built = ""
-            for _, seg in ipairs(segments) do
-                built = built == "" and seg or (built .. "/" .. seg)
-                if not isfolder(built) then
-                    pcall(makefolder, built)
-                end
-            end
-        end
-        return isfolder(path)
-    end
-
-    local function runAutoexec()
-        if not (listfiles and readfile and loadstring) then return end
-        if not ensureFolder(AUTOEXEC_FOLDER) then return end
-
-        local files = listfiles(AUTOEXEC_FOLDER)
-        if not files or #files == 0 then return end
-
-        for _, file in ipairs(files) do
-            if file:match("%.lua$") then
-                task.spawn(function()
-                    local ok, err = pcall(function()
-                        local chunk = loadstring(readfile(file))
-                        if chunk then chunk() end
-                    end)
-                    if not ok then
-                        warn("[MinhoHub autoexec] " .. file .. ": " .. tostring(err))
-                    end
-                end)
-                task.wait(0.1)
-            end
-        end
-    end
-
-    task.spawn(runAutoexec)
-end
-
---============================================================--
 
 LocalPlayer.AncestryChanged:Connect(function()
     if not LocalPlayer:IsDescendantOf(game) then
