@@ -606,6 +606,7 @@ end
 
 RageModule.applyNoRecoil = applyNoRecoil
 RageModule.revertNoRecoil = revertNoRecoil
+
 -- ============================================================
 -- Special Skill Cooldowns
 -- ============================================================
@@ -647,6 +648,7 @@ local function applySpecialCooldowns()
     local gunVal    = safeOption("FireCooldownSlider", SPECIAL_BASE)
     local meleeOn   = safeToggle("MeleeCooldownEnabled")
     local meleeVal  = safeOption("MeleeCooldownSlider", SPECIAL_BASE)
+
     local GUN_MIN = 0.02
     local MELEE_MIN = 0.02
 
@@ -1087,6 +1089,7 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
     if safeToggle("NoRecoilEnabled") then
         pcall(applyNoRecoil)
     end
+
     local now = os.clock()
     local root = getRoot()
     local hum = getHum()
