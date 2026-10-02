@@ -576,7 +576,6 @@ function CosmeticsWrap.Scene.reloadEquipped()
     end
 end
 
--- ===== 파괴 감지 watcher (단일 Heartbeat + 0.25초 스로틀) =====
 function CosmeticsWrap.Scene.watchItem(item, itemName)
     if typeof(item) ~= "table" then return end
     if CosmeticsWrap.Scene._watchers[item] ~= nil then return end
@@ -935,7 +934,6 @@ function CosmeticsWrap.enable()
 
     CosmeticsWrap.DataHook.initialize()
 
-    -- provider 설치 재시도 + 성공 즉시 applyAll
     task.spawn(function()
         for _ = 1, 120 do
             CosmeticsWrap.Scene.installViewModelProvider()
@@ -952,7 +950,6 @@ function CosmeticsWrap.enable()
         end
     end)
 
-    -- LocalFighter 준비되면 즉시 반영 + watcher 시작
     task.spawn(function()
         for _ = 1, 120 do
             local fighter = CosmeticsWrap.localFighter()
@@ -984,7 +981,6 @@ function CosmeticsWrap.disable()
     return true
 end
 
--- ★ 시즌 참 오버라이드도 함께 저장
 function CosmeticsWrap.syncStateToInput()
     if not CosmeticsWrap._stateInput then return end
     local payload = {
@@ -1187,7 +1183,19 @@ task.spawn(function()
     end
 end)
 
--- ★ 즉시 시도 + 폴링 (기존 7초 대기 제거)
+-- ============================================================
+-- Cosmetics Group
+-- ============================================================
+local Group = Cosmetics:AddGroupbox({ Name = "Rivals Cosmetics", Side = 1 })
+local NONE_LABEL = "None"
+
+local ClassDropdown, WeaponDropdown, KindDropdown, CosmeticDropdown
+local ViewerImage, InfoLabel
+local updateVisual
+local refreshDropdowns  -- forward declaration
+local syncCosmeticDropdown  -- forward declaration
+
+-- ★ 저장 상태 로드
 task.spawn(function()
     local function tryLoad()
         local input = CosmeticsWrap._stateInput
@@ -1202,7 +1210,6 @@ task.spawn(function()
         if decoded.selections ~= nil then
             CosmeticsWrap.selections = decoded.selections
         else
-            -- 예전 포맷(selections만) 호환
             CosmeticsWrap.selections = decoded
         end
         if decoded.rankCharm ~= nil and type(decoded.rankCharm) == "table" then
@@ -1210,6 +1217,10 @@ task.spawn(function()
         end
 
         CosmeticsWrap.applyAll()
+
+        if refreshDropdowns then
+            task.defer(refreshDropdowns)
+        end
         print("[Cosmetics] Loaded saved state")
         return true
     end
@@ -1219,12 +1230,6 @@ task.spawn(function()
         task.wait(0.25)
     end
 end)
-
--- ============================================================
--- Cosmetics Group
--- ============================================================
-local Group = Cosmetics:AddGroupbox({ Name = "Rivals Cosmetics", Side = 1 })
-local NONE_LABEL = "None"
 
 local function collectData()
     local byClass = {}
@@ -1293,7 +1298,7 @@ local function collectData()
         end
     end
 
-    return byClass, itemLib, cosLib
+    return byClass, itemLib
 end
 
 local function toAsset(id)
@@ -1307,7 +1312,7 @@ local function toAsset(id)
     return nil
 end
 
-local byClass, itemLibRef, cosLibRef = collectData()
+local byClass, itemLibRef = collectData()
 local CLASS_ORDER = { "Primary", "Secondary", "Melee", "Utility" }
 local classNames = {}
 for class in pairs(byClass) do
@@ -1325,13 +1330,13 @@ if #classNames == 0 then
     return true
 end
 
--- ★ 주무기(Primary) 기본
 local DEFAULT_CLASS = "Primary"
 if not table.find(classNames, DEFAULT_CLASS) then
     DEFAULT_CLASS = classNames[1]
 end
 
 local KINDS = { "Skin", "Wrap", "Charm", "Finisher" }
+local KIND_LABELS = { Skin = "Skin", Wrap = "Wrap", Charm = "Charm", Finisher = "Finisher" }
 
 local function weaponsOfClass(class)
     local names = {}
@@ -1350,7 +1355,6 @@ local function kindsOfWeapon(class, weapon)
     if byClass["All"] and byClass["All"]["All"] then
         for kind in pairs(byClass["All"]["All"]) do kinds[kind] = true end
     end
-    -- ★ 4종 강제 포함 (None만이라도 선택 가능)
     for _, k in ipairs(KINDS) do kinds[k] = true end
 
     local out = {}
@@ -1393,7 +1397,38 @@ local function entryByName(class, weapon, kind, name)
     return nil
 end
 
--- ★ 기본 스킨 이미지 (ItemLibrary 우선)
+-- ★ 폴백: CosmeticLibrary에서 직접 찾기
+local function findCosmeticEntry(kind, name)
+    if name == NONE_LABEL or name == nil then return nil end
+    -- 전체 byClass 순회
+    for _, weaponMap in pairs(byClass) do
+        for _, kindMap in pairs(weaponMap) do
+            if kindMap[kind] then
+                for _, entry in ipairs(kindMap[kind]) do
+                    if entry.name == name then return entry end
+                end
+            end
+        end
+    end
+    -- CosmeticLibrary에서 직접
+    local cosLib = CosmeticsWrap.cosmeticLibrary()
+    if cosLib and cosLib.Cosmetics and cosLib.Cosmetics[name] then
+        local data = cosLib.Cosmetics[name]
+        if type(data) == "table" then
+            if type(data.Image) == "string" and data.Image ~= "" then
+                return { name = name, visual = { kind = "image", value = data.Image }, kind = kind }
+            end
+            if data.Type == "Wrap" then
+                return { name = name, visual = { kind = "wrap3d", value = name }, kind = kind }
+            end
+            if data.Type == "Charm" then
+                return { name = name, visual = { kind = "charm3d", charmName = name }, kind = kind }
+            end
+        end
+    end
+    return nil
+end
+
 local function defaultWeaponImage(weapon)
     if itemLibRef and itemLibRef.Items then
         local itemData = itemLibRef.Items[weapon]
@@ -1410,9 +1445,22 @@ local function defaultWeaponImage(weapon)
     return nil
 end
 
-local ClassDropdown, WeaponDropdown, KindDropdown, CosmeticDropdown
-local ViewerImage, InfoLabel
-local updateVisual
+local function selectionValueFor(selection, kind)
+    if not selection then return NONE_LABEL end
+    local slot = string.lower(kind)
+    local v = selection[slot]
+    if v == nil then return NONE_LABEL end
+    if kind == "Wrap" then
+        if type(v) == "table" then
+            return v.name or NONE_LABEL
+        end
+        return v
+    end
+    if type(v) == "table" then
+        return v.Name or v.name or NONE_LABEL
+    end
+    return v
+end
 
 local function showImage(asset)
     if not ViewerImage then return end
@@ -1653,12 +1701,10 @@ updateVisual = function(class, weapon, kind, name)
     charmModel = nil
     wrapModel = nil
 
-    -- ★ None → 기본 무기 이미지
     if name == NONE_LABEL or name == nil then
         setViewerImageVisible(true)
         local img = defaultWeaponImage(weapon)
         if not img then
-            -- 폴백: 스킨 리스트 첫 이미지
             if byClass[class] and byClass[class][weapon] and byClass[class][weapon]["Skin"] then
                 local list = byClass[class][weapon]["Skin"]
                 if list[1] and list[1].visual and list[1].visual.kind == "image" then
@@ -1670,7 +1716,11 @@ updateVisual = function(class, weapon, kind, name)
         return
     end
 
+    -- byClass 우선 → 없으면 CosmeticLibrary 폴백
     local entry = entryByName(class, weapon, kind, name)
+    if not entry then
+        entry = findCosmeticEntry(kind, name)
+    end
     if not entry or not entry.visual then return end
 
     local v = entry.visual
@@ -1724,91 +1774,7 @@ updateVisual = function(class, weapon, kind, name)
     end
 end
 
--- ============================================================
--- 드롭다운 (초기값 = 주무기 Primary 첫 무기)
--- ============================================================
-local DEFAULT_WEAPON = weaponsOfClass(DEFAULT_CLASS)[1]
-local DEFAULT_KINDS  = kindsOfWeapon(DEFAULT_CLASS, DEFAULT_WEAPON)
-local DEFAULT_KIND   = DEFAULT_KINDS[1]
-
-ClassDropdown = Group:AddDropdown("ClassSelect", {
-    Text = "Weapon Type", Values = classNames, Default = DEFAULT_CLASS,
-    Multi = false, Searchable = true,
-    Callback = function(class)
-        local weapons = weaponsOfClass(class)
-        if WeaponDropdown then WeaponDropdown:SetValues(weapons) end
-        if weapons[1] then
-            local kinds = kindsOfWeapon(class, weapons[1])
-            if KindDropdown then KindDropdown:SetValues(kinds) end
-            if kinds[1] then
-                local list = cosmeticsOf(class, weapons[1], kinds[1])
-                if CosmeticDropdown then
-                    CosmeticDropdown:SetValues(list)
-                    CosmeticDropdown:SetValue(NONE_LABEL)
-                end
-                updateVisual(class, weapons[1], kinds[1], NONE_LABEL)
-            end
-        end
-    end,
-})
-
-WeaponDropdown = Group:AddDropdown("WeaponSelect", {
-    Text = "Weapon",
-    Values = weaponsOfClass(DEFAULT_CLASS),
-    Default = DEFAULT_WEAPON,
-    Multi = false, Searchable = true,
-    Callback = function(weapon)
-        local class = ClassDropdown.Value
-        local kinds = kindsOfWeapon(class, weapon)
-        if KindDropdown then KindDropdown:SetValues(kinds) end
-        if kinds[1] then
-            local list = cosmeticsOf(class, weapon, kinds[1])
-            if CosmeticDropdown then
-                CosmeticDropdown:SetValues(list)
-                CosmeticDropdown:SetValue(NONE_LABEL)
-            end
-            updateVisual(class, weapon, kinds[1], NONE_LABEL)
-        end
-    end,
-})
-
-KindDropdown = Group:AddDropdown("KindSelect", {
-    Text = "Cosmetics",
-    Values = DEFAULT_KINDS,
-    Default = DEFAULT_KIND,
-    Multi = false, Searchable = true,
-    Callback = function(kind)
-        local class = ClassDropdown.Value
-        local weapon = WeaponDropdown.Value
-        local list = cosmeticsOf(class, weapon, kind)
-        if CosmeticDropdown then
-            CosmeticDropdown:SetValues(list)
-            CosmeticDropdown:SetValue(NONE_LABEL)
-        end
-        updateVisual(class, weapon, kind, NONE_LABEL)
-    end,
-})
-
-CosmeticDropdown = Group:AddDropdown("CosmeticSelect", {
-    Text = "Skin",
-    Values = cosmeticsOf(DEFAULT_CLASS, DEFAULT_WEAPON, DEFAULT_KIND),
-    Default = NONE_LABEL,
-    Multi = false, Searchable = true,
-    Callback = function(name)
-        local class = ClassDropdown.Value
-        local weapon = WeaponDropdown.Value
-        local kind = KindDropdown.Value
-        updateVisual(class, weapon, kind, name)
-    end,
-})
-
--- ============================================================
--- Apply 버튼들
--- ============================================================
-Group:AddButton("Apply", function()
-    local weapon = WeaponDropdown.Value
-    local kind = KindDropdown.Value
-    local name = CosmeticDropdown.Value
+local function applyCosmeticImmediate(weapon, kind, name)
     if not weapon or weapon == "All" then return end
     local selection = CosmeticsWrap.selections[weapon] or {}
     local slot = string.lower(kind)
@@ -1828,8 +1794,124 @@ Group:AddButton("Apply", function()
     end
     CosmeticsWrap.Scene.reloadAll(weapon, selection)
     CosmeticsWrap.Scene.reloadEquipped()
+end
+
+syncCosmeticDropdown = function()
+    if not (ClassDropdown and WeaponDropdown and KindDropdown and CosmeticDropdown) then
+        return
+    end
+    local class = ClassDropdown.Value or DEFAULT_CLASS
+    local weapon = WeaponDropdown.Value
+    local kind = KindDropdown.Value
+    if not weapon or not kind then return end
+
+    local list = cosmeticsOf(class, weapon, kind)
+    CosmeticDropdown:SetValues(list)
+
+    local sel = CosmeticsWrap.selections[weapon]
+    local saved = selectionValueFor(sel, kind)
+    if not table.find(list, saved) then
+        saved = NONE_LABEL
+    end
+    CosmeticDropdown:SetValue(saved)
+
+    if CosmeticDropdown.SetText then
+        pcall(function() CosmeticDropdown:SetText(KIND_LABELS[kind] or kind) end)
+    elseif CosmeticDropdown.TextLabel then
+        pcall(function() CosmeticDropdown.TextLabel.Text = KIND_LABELS[kind] or kind end)
+    end
+
+    updateVisual(class, weapon, kind, saved)
+end
+
+refreshDropdowns = function()
+    syncCosmeticDropdown()
+end
+
+ClassDropdown = Group:AddDropdown("ClassSelect", {
+    Text = "Weapon Type", Values = classNames, Default = DEFAULT_CLASS,
+    Multi = false, Searchable = true,
+    Callback = function(class)
+        local weapons = weaponsOfClass(class)
+        if WeaponDropdown then WeaponDropdown:SetValues(weapons) end
+        if weapons[1] then
+            local kinds = kindsOfWeapon(class, weapons[1])
+            if KindDropdown then KindDropdown:SetValues(kinds) end
+            if kinds[1] then
+                if WeaponDropdown then WeaponDropdown:SetValue(weapons[1]) end
+                if KindDropdown then KindDropdown:SetValue(kinds[1]) end
+                syncCosmeticDropdown()
+            end
+        end
+    end,
+})
+
+WeaponDropdown = Group:AddDropdown("WeaponSelect", {
+    Text = "Weapon",
+    Values = weaponsOfClass(DEFAULT_CLASS),
+    Default = DEFAULT_WEAPON,
+    Multi = false, Searchable = true,
+    Callback = function(weapon)
+        local class = ClassDropdown.Value
+        local kinds = kindsOfWeapon(class, weapon)
+        if KindDropdown then KindDropdown:SetValues(kinds) end
+        if kinds[1] then
+            if KindDropdown then KindDropdown:SetValue(kinds[1]) end
+            syncCosmeticDropdown()
+        end
+    end,
+})
+
+KindDropdown = Group:AddDropdown("KindSelect", {
+    Text = "Cosmetics",
+    Values = DEFAULT_KINDS,
+    Default = DEFAULT_KIND,
+    Multi = false, Searchable = true,
+    Callback = function(kind)
+        syncCosmeticDropdown()
+    end,
+})
+
+CosmeticDropdown = Group:AddDropdown("CosmeticSelect", {
+    Text = "Skin",
+    Values = cosmeticsOf(DEFAULT_CLASS, DEFAULT_WEAPON, DEFAULT_KIND),
+    Default = NONE_LABEL,
+    Multi = false, Searchable = true,
+    Callback = function(name)
+        local class = ClassDropdown.Value
+        local weapon = WeaponDropdown.Value
+        local kind = KindDropdown.Value
+        updateVisual(class, weapon, kind, name)
+        applyCosmeticImmediate(weapon, kind, name)
+    end,
+})
+
+-- ★ 뷰어 실시간 폴링 (0.2초마다 드롭다운 상태와 비교해서 바뀌면 갱신)
+local _viewerState = { class = nil, weapon = nil, kind = nil, name = nil }
+task.spawn(function()
+    while task.wait(0.2) do
+        if ClassDropdown and WeaponDropdown and KindDropdown and CosmeticDropdown then
+            local class = ClassDropdown.Value
+            local weapon = WeaponDropdown.Value
+            local kind = KindDropdown.Value
+            local name = CosmeticDropdown.Value
+            if class ~= _viewerState.class
+                or weapon ~= _viewerState.weapon
+                or kind ~= _viewerState.kind
+                or name ~= _viewerState.name then
+                _viewerState.class = class
+                _viewerState.weapon = weapon
+                _viewerState.kind = kind
+                _viewerState.name = name
+                pcall(updateVisual, class, weapon, kind, name)
+            end
+        end
+    end
 end)
 
+-- ============================================================
+-- Apply To All / Reset All
+-- ============================================================
 Group:AddButton("Apply To All Weapons", function()
     local kind = KindDropdown.Value
     local name = CosmeticDropdown.Value
@@ -1879,13 +1961,13 @@ Group:AddButton("Reset All", function()
     end
 end)
 
--- 초기 뷰어 세팅: 주무기 + None
+-- 초기 세팅
 task.defer(function()
     if DEFAULT_WEAPON then
-        if CosmeticDropdown then
-            CosmeticDropdown:SetValue(NONE_LABEL)
-        end
-        updateVisual(DEFAULT_CLASS, DEFAULT_WEAPON, DEFAULT_KIND, NONE_LABEL)
+        if ClassDropdown then ClassDropdown:SetValue(DEFAULT_CLASS) end
+        if WeaponDropdown then WeaponDropdown:SetValue(DEFAULT_WEAPON) end
+        if KindDropdown then KindDropdown:SetValue(DEFAULT_KIND) end
+        syncCosmeticDropdown()
     end
 end)
 
