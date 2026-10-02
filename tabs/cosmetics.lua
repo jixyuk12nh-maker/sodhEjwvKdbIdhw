@@ -9,263 +9,269 @@ local CosmeticsWrap = {}
 CosmeticsWrap._cache = {}
 
 function CosmeticsWrap._require(key, fn)
-local hit = CosmeticsWrap._cache[key]
-if hit ~= nil then return hit ~= false and hit or nil end
-local ok, value = pcall(fn)
-if ok and value ~= nil then
-CosmeticsWrap._cache[key] = value
-return value
-end
-return nil
+    local hit = CosmeticsWrap._cache[key]
+    if hit ~= nil then return hit ~= false and hit or nil end
+    local ok, value = pcall(fn)
+    if ok and value ~= nil then
+        CosmeticsWrap._cache[key] = value
+        return value
+    end
+    return nil
 end
 
 function CosmeticsWrap.dataController()
-return CosmeticsWrap._require("PlayerDataController", function()
-return require(LocalPlayer.PlayerScripts.Controllers.PlayerDataController)
-end)
+    return CosmeticsWrap._require("PlayerDataController", function()
+        return require(LocalPlayer.PlayerScripts.Controllers.PlayerDataController)
+    end)
 end
 
 function CosmeticsWrap.fighterController()
-return CosmeticsWrap._require("FighterController", function()
-return require(LocalPlayer.PlayerScripts.Controllers.FighterController)
-end)
+    return CosmeticsWrap._require("FighterController", function()
+        return require(LocalPlayer.PlayerScripts.Controllers.FighterController)
+    end)
 end
 
 function CosmeticsWrap.localFighter()
-local ctrl = CosmeticsWrap.fighterController()
-if ctrl == nil then return nil end
-return rawget(ctrl, "LocalFighter")
+    local ctrl = CosmeticsWrap.fighterController()
+    if ctrl == nil then return nil end
+    return rawget(ctrl, "LocalFighter")
 end
 
 function CosmeticsWrap.playerDataUtility()
-return CosmeticsWrap._require("PlayerDataUtility", function()
-return require(ReplicatedStorage.Modules.PlayerDataUtility)
-end)
+    return CosmeticsWrap._require("PlayerDataUtility", function()
+        return require(ReplicatedStorage.Modules.PlayerDataUtility)
+    end)
 end
 
 function CosmeticsWrap.enumLibrary()
-return CosmeticsWrap._require("EnumLibrary", function()
-return require(ReplicatedStorage.Modules.EnumLibrary)
-end)
+    return CosmeticsWrap._require("EnumLibrary", function()
+        return require(ReplicatedStorage.Modules.EnumLibrary)
+    end)
 end
 
 function CosmeticsWrap.clientItem()
-return CosmeticsWrap._require("ClientItem", function()
-local classes = LocalPlayer.PlayerScripts.Modules.ClientReplicatedClasses
-return require(classes.ClientFighter.ClientItem)
-end)
+    return CosmeticsWrap._require("ClientItem", function()
+        local classes = LocalPlayer.PlayerScripts.Modules.ClientReplicatedClasses
+        return require(classes.ClientFighter.ClientItem)
+    end)
 end
 
 function CosmeticsWrap.clientViewModel()
-return CosmeticsWrap._require("ClientViewModel", function()
-local classes = LocalPlayer.PlayerScripts.Modules.ClientReplicatedClasses
-return require(classes.ClientFighter.ClientItem.ClientViewModel)
-end)
+    return CosmeticsWrap._require("ClientViewModel", function()
+        local classes = LocalPlayer.PlayerScripts.Modules.ClientReplicatedClasses
+        return require(classes.ClientFighter.ClientItem.ClientViewModel)
+    end)
 end
 
 function CosmeticsWrap.equipmentModule()
-return CosmeticsWrap._require("Equipment", function()
-local ui = LocalPlayer.PlayerScripts.Modules.UserInterface
-return require(ui.Equipment)
-end)
+    return CosmeticsWrap._require("Equipment", function()
+        local ui = LocalPlayer.PlayerScripts.Modules.UserInterface
+        return require(ui.Equipment)
+    end)
 end
 
 function CosmeticsWrap.lobbyModule()
-return CosmeticsWrap._require("Lobby", function()
-local ui = LocalPlayer.PlayerScripts.Modules.UserInterface
-return require(ui.Lobby)
-end)
+    return CosmeticsWrap._require("Lobby", function()
+        local ui = LocalPlayer.PlayerScripts.Modules.UserInterface
+        return require(ui.Lobby)
+    end)
 end
 
 function CosmeticsWrap.itemLibrary()
-return CosmeticsWrap._require("ItemLibrary", function()
-return require(ReplicatedStorage.Modules.ItemLibrary)
-end)
+    return CosmeticsWrap._require("ItemLibrary", function()
+        return require(ReplicatedStorage.Modules.ItemLibrary)
+    end)
 end
 
 function CosmeticsWrap.cosmeticLibrary()
-return CosmeticsWrap._require("CosmeticLibrary", function()
-return require(ReplicatedStorage.Modules.CosmeticLibrary)
-end)
+    return CosmeticsWrap._require("CosmeticLibrary", function()
+        return require(ReplicatedStorage.Modules.CosmeticLibrary)
+    end)
 end
 
 function CosmeticsWrap.assetsFolder(sub)
-local ps = LocalPlayer:FindFirstChild("PlayerScripts")
-local assets = ps and ps:FindFirstChild("Assets")
-if not assets then return nil end
-if sub == nil then return assets end
-return assets:FindFirstChild(sub)
+    local ps = LocalPlayer:FindFirstChild("PlayerScripts")
+    local assets = ps and ps:FindFirstChild("Assets")
+    if not assets then return nil end
+    if sub == nil then return assets end
+    return assets:FindFirstChild(sub)
 end
 
 function CosmeticsWrap.wrapPreviewAsset()
-return CosmeticsWrap._require("WrapPreviewAsset", function()
-local misc = CosmeticsWrap.assetsFolder("Misc")
-if not misc then return nil end
-return misc:FindFirstChild("Wrap")
-end)
+    return CosmeticsWrap._require("WrapPreviewAsset", function()
+        local misc = CosmeticsWrap.assetsFolder("Misc")
+        if not misc then return nil end
+        return misc:FindFirstChild("Wrap")
+    end)
 end
 
 function CosmeticsWrap.wrapTextureAssets()
-return CosmeticsWrap._require("WrapTextureAssets", function()
-return CosmeticsWrap.assetsFolder("WrapTextures")
-end)
+    return CosmeticsWrap._require("WrapTextureAssets", function()
+        return CosmeticsWrap.assetsFolder("WrapTextures")
+    end)
 end
 
 function CosmeticsWrap.charmAssets()
-return CosmeticsWrap._require("CharmAssets", function()
-return CosmeticsWrap.assetsFolder("Charms")
-end)
+    return CosmeticsWrap._require("CharmAssets", function()
+        return CosmeticsWrap.assetsFolder("Charms")
+    end)
 end
 
 CosmeticsWrap.DataHook = {
-spoofs = {},
-restore = nil,
-conn = nil,
-loaded = false,
-_signalCache = {},
+    spoofs = {},
+    restore = nil,
+    conn = nil,
+    loaded = false,
+    _signalCache = {},
 }
 
 function CosmeticsWrap.DataHook.load(current)
-local hook = CosmeticsWrap.DataHook
-local inner = rawget(current, "Data")
-if inner == nil then return false end
-if hook.restore ~= nil then
-if hook.restore.current == current then return true end
-CosmeticsWrap.DataHook.revert()
-end
-local proxy = setmetatable({}, {
-__index = function(_, key)
-local spoof = hook.spoofs[key]
-if spoof ~= nil then return spoof(inner[key]) end
-return inner[key]
-end,
-__newindex = function(_, key, value) inner[key] = value end,
-__len = function() return #inner end,
-__iter = function() return next, inner end,
-})
-rawset(current, "Data", proxy)
-hook.restore = { current = current, inner = inner }
-hook._signalCache = {}
-return true
+    local hook = CosmeticsWrap.DataHook
+    local inner = rawget(current, "Data")
+    if inner == nil then return false end
+    if hook.restore ~= nil then
+        if hook.restore.current == current then return true end
+        CosmeticsWrap.DataHook.revert()
+    end
+    local proxy = setmetatable({}, {
+        __index = function(_, key)
+            local spoof = hook.spoofs[key]
+            if spoof ~= nil then return spoof(inner[key]) end
+            return inner[key]
+        end,
+        __newindex = function(_, key, value) inner[key] = value end,
+        __len = function() return #inner end,
+        __iter = function() return next, inner end,
+    })
+    rawset(current, "Data", proxy)
+    hook.restore = { current = current, inner = inner }
+    hook._signalCache = {}
+    return true
 end
 
 function CosmeticsWrap.DataHook._revert()
-local hook = CosmeticsWrap.DataHook
-local restore = hook.restore
-if restore == nil then return end
-hook.restore = nil
-hook._signalCache = {}
-rawset(restore.current, "Data", restore.inner)
+    local hook = CosmeticsWrap.DataHook
+    local restore = hook.restore
+    if restore == nil then return end
+    hook.restore = nil
+    hook._signalCache = {}
+    rawset(restore.current, "Data", restore.inner)
+end
+
+function CosmeticsWrap.DataHook.revert()
+    CosmeticsWrap.DataHook._revert()
 end
 
 function CosmeticsWrap.DataHook.initialize()
-local hook = CosmeticsWrap.DataHook
-if hook.loaded then return true end
-local controller = CosmeticsWrap.dataController()
-if controller == nil then return false end
-local added = rawget(controller, "PlayerDataAdded")
-if added ~= nil then
-local ok, conn = pcall(function()
-return added:Connect(function()
-local current = rawget(controller, "CurrentData")
-if current ~= nil then hook.load(current) end
-end)
-end)
-if ok then hook.conn = conn end
-end
-hook.loaded = true
-local current = rawget(controller, "CurrentData")
-if current ~= nil then return hook.load(current) end
-return false
+    local hook = CosmeticsWrap.DataHook
+    if hook.loaded and hook.restore ~= nil then return true end
+    local controller = CosmeticsWrap.dataController()
+    if controller == nil then return false end
+    if not hook.loaded then
+        local added = rawget(controller, "PlayerDataAdded")
+        if added ~= nil then
+            local ok, conn = pcall(function()
+                return added:Connect(function()
+                    local current = rawget(controller, "CurrentData")
+                    if current ~= nil then hook.load(current) end
+                end)
+            end)
+            if ok then hook.conn = conn end
+        end
+        hook.loaded = true
+    end
+    local current = rawget(controller, "CurrentData")
+    if current ~= nil then return hook.load(current) end
+    return false
 end
 
 function CosmeticsWrap.DataHook.set(field, fn)
-CosmeticsWrap.DataHook.spoofs[field] = fn
-CosmeticsWrap.DataHook.initialize()
+    CosmeticsWrap.DataHook.spoofs[field] = fn
+    CosmeticsWrap.DataHook.initialize()
 end
 
 function CosmeticsWrap.DataHook.unset(field)
-CosmeticsWrap.DataHook.spoofs[field] = nil
+    CosmeticsWrap.DataHook.spoofs[field] = nil
 end
 
 function CosmeticsWrap.DataHook.getOriginal(field)
-local restore = CosmeticsWrap.DataHook.restore
-if restore == nil then
-local controller = CosmeticsWrap.dataController()
-local current = controller ~= nil and rawget(controller, "CurrentData") or nil
-local data = current ~= nil and rawget(current, "Data") or nil
-return data ~= nil and data[field] or nil
-end
-return restore.inner[field]
+    local restore = CosmeticsWrap.DataHook.restore
+    if restore == nil then
+        local controller = CosmeticsWrap.dataController()
+        local current = controller ~= nil and rawget(controller, "CurrentData") or nil
+        local data = current ~= nil and rawget(current, "Data") or nil
+        return data ~= nil and data[field] or nil
+    end
+    return restore.inner[field]
 end
 
 function CosmeticsWrap.DataHook._signal(current, field)
-local cache = CosmeticsWrap.DataHook._signalCache
-local hit = cache[field]
-if hit ~= nil then return hit ~= false and hit or nil end
-local ok, sig = pcall(function() return current:GetDataChangedSignal(field) end)
-if ok and sig ~= nil then
-cache[field] = sig
-return sig
-end
-cache[field] = false
-return nil
+    local cache = CosmeticsWrap.DataHook._signalCache
+    local hit = cache[field]
+    if hit ~= nil then return hit ~= false and hit or nil end
+    local ok, sig = pcall(function() return current:GetDataChangedSignal(field) end)
+    if ok and sig ~= nil then
+        cache[field] = sig
+        return sig
+    end
+    cache[field] = false
+    return nil
 end
 
 function CosmeticsWrap.DataHook.trigger(field)
-local hook = CosmeticsWrap.DataHook
-local current = hook.restore and hook.restore.current
-if current == nil then
-local controller = CosmeticsWrap.dataController()
-current = controller and rawget(controller, "CurrentData") or nil
-end
-if current == nil then return end
-local sig = CosmeticsWrap.DataHook._signal(current, field)
-if sig ~= nil then
-pcall(function() sig:Fire(current.Data[field], field) end)
-end
+    local hook = CosmeticsWrap.DataHook
+    local current = hook.restore and hook.restore.current
+    if current == nil then
+        local controller = CosmeticsWrap.dataController()
+        current = controller and rawget(controller, "CurrentData") or nil
+    end
+    if current == nil then return end
+    local sig = CosmeticsWrap.DataHook._signal(current, field)
+    if sig ~= nil then
+        pcall(function() sig:Fire(current.Data[field], field) end)
+    end
 end
 
 function CosmeticsWrap.DataHook.destroy()
-local hook = CosmeticsWrap.DataHook
-local fields = {}
-for field in pairs(hook.spoofs) do fields[#fields + 1] = field end
-table.clear(hook.spoofs)
-hook._revert()
-if hook.conn ~= nil then
-pcall(function() hook.conn:Disconnect() end)
-hook.conn = nil
-end
-hook.loaded = false
-for _, field in ipairs(fields) do hook.trigger(field) end
+    local hook = CosmeticsWrap.DataHook
+    local fields = {}
+    for field in pairs(hook.spoofs) do fields[#fields + 1] = field end
+    table.clear(hook.spoofs)
+    hook._revert()
+    if hook.conn ~= nil then
+        pcall(function() hook.conn:Disconnect() end)
+        hook.conn = nil
+    end
+    hook.loaded = false
+    for _, field in ipairs(fields) do hook.trigger(field) end
 end
 
 CosmeticsWrap.ItemHook = { ALIAS = "GetWeaponData\0ohaio", restore = nil, _targetFn = nil }
 
 function CosmeticsWrap.ItemHook.target()
-if CosmeticsWrap.ItemHook._targetFn ~= nil then
-return CosmeticsWrap.ItemHook._targetFn
-end
-local controller = CosmeticsWrap.dataController()
-if controller == nil then return nil end
-local mt = getmetatable(controller)
-local index = typeof(mt) == "table" and rawget(mt, "__index") or nil
-if typeof(index) ~= "table" then return nil end
-local fn = rawget(index, "GetWeaponData")
-if typeof(fn) == "function" then
-CosmeticsWrap.ItemHook._targetFn = fn
-return fn
-end
-return nil
+    if CosmeticsWrap.ItemHook._targetFn ~= nil then
+        return CosmeticsWrap.ItemHook._targetFn
+    end
+    local controller = CosmeticsWrap.dataController()
+    if controller == nil then return nil end
+    local mt = getmetatable(controller)
+    local index = typeof(mt) == "table" and rawget(mt, "__index") or nil
+    if typeof(index) ~= "table" then return nil end
+    local fn = rawget(index, "GetWeaponData")
+    if typeof(fn) == "function" then
+        CosmeticsWrap.ItemHook._targetFn = fn
+        return fn
+    end
+    return nil
 end
 
 function CosmeticsWrap.ItemHook.findOriginal(weaponName)
-local inventory = CosmeticsWrap.DataHook.getOriginal("WeaponInventory")
-if typeof(inventory) ~= "table" then return nil end
-for _, entry in pairs(inventory) do
-if typeof(entry) == "table" and entry.Name == weaponName then return entry end
-end
-return nil
+    local inventory = CosmeticsWrap.DataHook.getOriginal("WeaponInventory")
+    if typeof(inventory) ~= "table" then return nil end
+    for _, entry in pairs(inventory) do
+        if typeof(entry) == "table" and entry.Name == weaponName then return entry end
+    end
+    return nil
 end
 
 function CosmeticsWrap.ItemHook.applyCosmetics(data, selection)
@@ -317,243 +323,306 @@ function CosmeticsWrap.ItemHook.applyCosmetics(data, selection)
 end
 
 function CosmeticsWrap.ItemHook.getWeaponData(_self, controller, weaponName)
-local original = CosmeticsWrap.ItemHook.findOriginal(weaponName)
-if original == nil then return nil end
-local selection = CosmeticsWrap.selections[weaponName]
-if selection == nil then return original end
-local patched, changed = CosmeticsWrap.ItemHook.applyCosmetics(
-table.clone(original), selection)
-if not changed then return original end
-patched.Level = original.Level
-patched.Prestige = original.Prestige
-patched.XP = original.XP
-return patched
+    local original = CosmeticsWrap.ItemHook.findOriginal(weaponName)
+    if original == nil then return nil end
+    local selection = CosmeticsWrap.selections[weaponName]
+    if selection == nil then return original end
+    local patched, changed = CosmeticsWrap.ItemHook.applyCosmetics(
+        table.clone(original), selection)
+    if not changed then return original end
+    patched.Level = original.Level
+    patched.Prestige = original.Prestige
+    patched.XP = original.XP
+    return patched
 end
 
 function CosmeticsWrap.ItemHook.load()
-if CosmeticsWrap.ItemHook.restore ~= nil then return true end
-if debug.getconstants == nil or debug.setconstant == nil then
-return false, "executor has no constant access"
-end
-local fn = CosmeticsWrap.ItemHook.target()
-if fn == nil then return false, "GetWeaponData function unavailable" end
-local utility = CosmeticsWrap.playerDataUtility()
-if utility == nil then return false, "PlayerDataUtility unavailable" end
-local ok, constants = pcall(debug.getconstants, fn)
-if not ok or typeof(constants) ~= "table" then return false, "constants unreadable" end
-for index, value in pairs(constants) do
-if value == "GetWeaponData" then
-CosmeticsWrap.ItemHook.restore = { fn = fn, index = index, original = value, utility = utility }
-pcall(debug.setconstant, fn, index, CosmeticsWrap.ItemHook.ALIAS)
-break
-end
-end
-if CosmeticsWrap.ItemHook.restore == nil then
-return false, "GetWeaponData constant not found"
-end
-rawset(utility, CosmeticsWrap.ItemHook.ALIAS, CosmeticsWrap.ItemHook.getWeaponData)
-return true
+    if CosmeticsWrap.ItemHook.restore ~= nil then return true end
+    if debug.getconstants == nil or debug.setconstant == nil then
+        return false, "executor has no constant access"
+    end
+    local fn = CosmeticsWrap.ItemHook.target()
+    if fn == nil then return false, "GetWeaponData function unavailable" end
+    local utility = CosmeticsWrap.playerDataUtility()
+    if utility == nil then return false, "PlayerDataUtility unavailable" end
+    local ok, constants = pcall(debug.getconstants, fn)
+    if not ok or typeof(constants) ~= "table" then return false, "constants unreadable" end
+    for index, value in pairs(constants) do
+        if value == "GetWeaponData" then
+            CosmeticsWrap.ItemHook.restore = { fn = fn, index = index, original = value, utility = utility }
+            pcall(debug.setconstant, fn, index, CosmeticsWrap.ItemHook.ALIAS)
+            break
+        end
+    end
+    if CosmeticsWrap.ItemHook.restore == nil then
+        return false, "GetWeaponData constant not found"
+    end
+    rawset(utility, CosmeticsWrap.ItemHook.ALIAS, CosmeticsWrap.ItemHook.getWeaponData)
+    return true
 end
 
 function CosmeticsWrap.ItemHook.revert()
-local restore = CosmeticsWrap.ItemHook.restore
-if restore == nil then return end
-CosmeticsWrap.ItemHook.restore = nil
-pcall(debug.setconstant, restore.fn, restore.index, restore.original)
-if restore.utility ~= nil then
-rawset(restore.utility, CosmeticsWrap.ItemHook.ALIAS, nil)
-end
+    local restore = CosmeticsWrap.ItemHook.restore
+    if restore == nil then return end
+    CosmeticsWrap.ItemHook.restore = nil
+    pcall(debug.setconstant, restore.fn, restore.index, restore.original)
+    if restore.utility ~= nil then
+        rawset(restore.utility, CosmeticsWrap.ItemHook.ALIAS, nil)
+    end
 end
 
-CosmeticsWrap.Scene = { _equipmentQueued = false, _selectionQueued = false, _objectsCache = nil, _objectsCacheTime = 0 }
+CosmeticsWrap.Scene = {
+    _equipmentQueued = false,
+    _selectionQueued = false,
+    _objectsCache = nil,
+    _objectsCacheTime = 0,
+    _cwReloading = false,
+}
 
 function CosmeticsWrap.Scene.thunk(object, methodName)
-if object == nil then return nil end
-local mt = getmetatable(object)
-local index = typeof(mt) == "table" and rawget(mt, "__index") or nil
-local method = typeof(index) == "table" and rawget(index, methodName) or nil
-if method == nil then method = rawget(object, methodName) end
-if typeof(method) ~= "function" then return nil end
-return function() coroutine.wrap(method)(object) end
+    if object == nil then return nil end
+    local mt = getmetatable(object)
+    local index = typeof(mt) == "table" and rawget(mt, "__index") or nil
+    local method = typeof(index) == "table" and rawget(index, methodName) or nil
+    if method == nil then method = rawget(object, methodName) end
+    if typeof(method) ~= "function" then return nil end
+    return function() coroutine.wrap(method)(object) end
 end
 
 function CosmeticsWrap.Scene.run(thunks)
-local co = coroutine.create(function()
-if getthreadidentity == nil or setthreadidentity == nil then
-for _, thunk in ipairs(thunks) do
-if thunk ~= nil then pcall(thunk) end
-end
-return
-end
-local identity = getthreadidentity()
-local raised = pcall(setthreadidentity, 2)
-for _, thunk in ipairs(thunks) do
-if thunk ~= nil then pcall(thunk) end
-end
-if raised then pcall(setthreadidentity, identity) end
-end)
-local ok, err = coroutine.resume(co)
-if not ok then warn("[CosmeticsWrap] scene: " .. tostring(err)) end
+    local co = coroutine.create(function()
+        if getthreadidentity == nil or setthreadidentity == nil then
+            for _, thunk in ipairs(thunks) do
+                if thunk ~= nil then pcall(thunk) end
+            end
+            return
+        end
+        local identity = getthreadidentity()
+        local raised = pcall(setthreadidentity, 2)
+        for _, thunk in ipairs(thunks) do
+            if thunk ~= nil then pcall(thunk) end
+        end
+        if raised then pcall(setthreadidentity, identity) end
+    end)
+    local ok, err = coroutine.resume(co)
+    if not ok then warn("[CosmeticsWrap] scene: " .. tostring(err)) end
 end
 
 function CosmeticsWrap.Scene.objects()
-local now = os.clock()
-if CosmeticsWrap.Scene._objectsCache and now - CosmeticsWrap.Scene._objectsCacheTime < 5 then
-return CosmeticsWrap.Scene._objectsCache
-end
-local out = {}
-local equipment = CosmeticsWrap.equipmentModule()
-if equipment ~= nil then
-local interface = rawget(equipment, "Interface")
-if typeof(interface) == "table" then
-local customize = rawget(interface, "Customize")
-out.cosmetics = typeof(customize) == "table" and rawget(customize, "Cosmetics") or nil
-out.left = rawget(interface, "Left")
-end
-out.floatingModel = rawget(equipment, "FloatingModel")
-end
-local lobby = CosmeticsWrap.lobbyModule()
-if lobby ~= nil then
-out.buttons = rawget(lobby, "Buttons")
-end
-if next(out) == nil then return nil end
-CosmeticsWrap.Scene._objectsCache = out
-CosmeticsWrap.Scene._objectsCacheTime = now
-return out
+    local now = os.clock()
+    if CosmeticsWrap.Scene._objectsCache and now - CosmeticsWrap.Scene._objectsCacheTime < 0.5 then
+        return CosmeticsWrap.Scene._objectsCache
+    end
+    local out = {}
+    local equipment = CosmeticsWrap.equipmentModule()
+    if equipment ~= nil then
+        local interface = rawget(equipment, "Interface")
+        if typeof(interface) == "table" then
+            local customize = rawget(interface, "Customize")
+            out.cosmetics = typeof(customize) == "table" and rawget(customize, "Cosmetics") or nil
+            out.left = rawget(interface, "Left")
+        end
+        out.floatingModel = rawget(equipment, "FloatingModel")
+    end
+    local lobby = CosmeticsWrap.lobbyModule()
+    if lobby ~= nil then
+        out.buttons = rawget(lobby, "Buttons")
+    end
+    if next(out) == nil then return nil end
+    CosmeticsWrap.Scene._objectsCache = out
+    CosmeticsWrap.Scene._objectsCacheTime = now
+    return out
 end
 
 function CosmeticsWrap.Scene.encodeKeys(tbl)
-local enums = CosmeticsWrap.enumLibrary()
-if enums == nil then return tbl end
-local out = {}
-for key, value in pairs(tbl) do
-local ok, encoded = pcall(function() return enums:ToEnum(key) end)
-out[(ok and encoded) or key] = value
-end
-return out
+    local enums = CosmeticsWrap.enumLibrary()
+    if enums == nil then return tbl end
+    local out = {}
+    for key, value in pairs(tbl) do
+        local ok, encoded = pcall(function() return enums:ToEnum(key) end)
+        out[(ok and encoded) or key] = value
+    end
+    return out
 end
 
 function CosmeticsWrap.Scene.buildViewModelData(itemName, selection)
-local name = itemName
-local skin = selection ~= nil and selection.skin or nil
-if skin ~= nil and skin ~= "RANDOM_COSMETIC"
-and not string.match(skin, "^NONE_COSMETIC") then
-name = skin
-end
-local record = { Name = name }
-local wrap = selection ~= nil and selection.wrap or nil
-if wrap ~= nil and wrap.name ~= nil
-and not string.match(wrap.name, "^NONE_COSMETIC") then
-record.Wrap = { Name = wrap.name, Inverted = wrap.inverted == true }
-end
-local charm = selection ~= nil and selection.charm or nil
-if charm ~= nil and not string.match(charm, "^NONE_COSMETIC") then
-local charmData = { Name = charm }
-local rankCharm = CosmeticsWrap.RankCharm
-if rankCharm ~= nil and type(rankCharm.ResolveMetadata) == "function" then
-local ok, metadata = pcall(function()
-return rankCharm:ResolveMetadata(charm)
-end)
-if ok and metadata ~= nil then
-charmData.Metadata = metadata
-end
-end
-record.Charm = charmData
-end
-return CosmeticsWrap.Scene.encodeKeys({ Data = CosmeticsWrap.Scene.encodeKeys(record) })
+    local name = itemName
+    local skin = selection ~= nil and selection.skin or nil
+    if skin ~= nil and skin ~= "RANDOM_COSMETIC"
+        and not string.match(skin, "^NONE_COSMETIC") then
+        name = skin
+    end
+    local record = { Name = name }
+    local wrap = selection ~= nil and selection.wrap or nil
+    if wrap ~= nil and wrap.name ~= nil
+        and not string.match(wrap.name, "^NONE_COSMETIC") then
+        record.Wrap = { Name = wrap.name, Inverted = wrap.inverted == true }
+    end
+    local charm = selection ~= nil and selection.charm or nil
+    if charm ~= nil and not string.match(charm, "^NONE_COSMETIC") then
+        local charmData = { Name = charm }
+        local rankCharm = CosmeticsWrap.RankCharm
+        if rankCharm ~= nil and type(rankCharm.ResolveMetadata) == "function" then
+            local ok, metadata = pcall(function()
+                return rankCharm:ResolveMetadata(charm)
+            end)
+            if ok and metadata ~= nil then
+                charmData.Metadata = metadata
+            end
+        end
+        record.Charm = charmData
+    end
+    return CosmeticsWrap.Scene.encodeKeys({ Data = CosmeticsWrap.Scene.encodeKeys(record) })
 end
 
 function CosmeticsWrap.Scene.reloadViewModel(item, itemName, selection)
-if typeof(item) ~= "table" then return false end
-local viewModel = rawget(item, "ViewModel")
-if viewModel == nil then return false end
-local vmData = rawget(viewModel, "Data")
-if vmData == nil then
-    local enumLib = CosmeticsWrap.enumLibrary()
-    if enumLib ~= nil then
-        local okKey, dataKey = pcall(function()
-            return enumLib:ToEnum("Data")
-        end)
-        if okKey and dataKey ~= nil then
-            vmData = rawget(viewModel, dataKey)
+    if typeof(item) ~= "table" then return false end
+    local viewModel = rawget(item, "ViewModel")
+    if viewModel == nil then return false end
+    local vmData = rawget(viewModel, "Data")
+    if vmData == nil then
+        local enumLib = CosmeticsWrap.enumLibrary()
+        if enumLib ~= nil then
+            local okKey, dataKey = pcall(function()
+                return enumLib:ToEnum("Data")
+            end)
+            if okKey and dataKey ~= nil then
+                vmData = rawget(viewModel, dataKey)
+            end
         end
     end
-end
-if vmData == nil then return false end
+    if vmData == nil then return false end
 
-local clientItem = CosmeticsWrap.clientItem()
-local clientViewModel = CosmeticsWrap.clientViewModel()
-if clientItem == nil or clientViewModel == nil then return false end
+    local clientItem = CosmeticsWrap.clientItem()
+    local clientViewModel = CosmeticsWrap.clientViewModel()
+    if clientItem == nil or clientViewModel == nil then return false end
 
-local source = CosmeticsWrap.Scene.buildViewModelData(itemName, selection)
+    local source = CosmeticsWrap.Scene.buildViewModelData(itemName, selection)
 
-local created
-CosmeticsWrap.Scene.run({ function()
-pcall(function() coroutine.wrap(clientViewModel.Destroy)(viewModel) end)
-pcall(function()
-created = coroutine.wrap(clientItem._CreateViewModel)(item, source)
-end)
-if created == nil then
-pcall(function()
-created = coroutine.wrap(clientItem._CreateViewModel)(item,
-CosmeticsWrap.Scene.buildViewModelData(itemName, nil))
-end)
-if created ~= nil then rawset(item, "ViewModel", created) end
-return
-end
-rawset(item, "ViewModel", created)
-local fighter = rawget(item, "ClientFighter") or CosmeticsWrap.localFighter()
-if fighter ~= nil then
-local mt = getmetatable(fighter)
-local index = typeof(mt) == "table" and rawget(mt, "__index") or nil
-local getArms = typeof(index) == "table" and rawget(index, "GetArmsData") or nil
-if getArms ~= nil then
-local arms = table.pack(coroutine.wrap(getArms)(fighter))
-pcall(function()
-coroutine.wrap(clientViewModel.SetArmsData)(created, table.unpack(arms, 1, arms.n))
-end)
-end
-end
-pcall(function() coroutine.wrap(clientViewModel.Equip)(created, true) end)
-local spring = rawget(created, "_equip_spring")
-if spring ~= nil then
-rawset(spring, "_position0", 0)
-rawset(spring, "_velocity0", 0)
-end
-end })
-return true
+    CosmeticsWrap.Scene._cwReloading = true
+    local created
+    CosmeticsWrap.Scene.run({ function()
+        pcall(function() coroutine.wrap(clientViewModel.Destroy)(viewModel) end)
+        pcall(function()
+            created = coroutine.wrap(clientItem._CreateViewModel)(item, source)
+        end)
+        if created == nil then
+            pcall(function()
+                created = coroutine.wrap(clientItem._CreateViewModel)(item,
+                    CosmeticsWrap.Scene.buildViewModelData(itemName, nil))
+            end)
+            if created ~= nil then rawset(item, "ViewModel", created) end
+            CosmeticsWrap.Scene._cwReloading = false
+            return
+        end
+        rawset(item, "ViewModel", created)
+        local fighter = rawget(item, "ClientFighter") or CosmeticsWrap.localFighter()
+        if fighter ~= nil then
+            local mt = getmetatable(fighter)
+            local index = typeof(mt) == "table" and rawget(mt, "__index") or nil
+            local getArms = typeof(index) == "table" and rawget(index, "GetArmsData") or nil
+            if getArms ~= nil then
+                local arms = table.pack(coroutine.wrap(getArms)(fighter))
+                pcall(function()
+                    coroutine.wrap(clientViewModel.SetArmsData)(created, table.unpack(arms, 1, arms.n))
+                end)
+            end
+        end
+        pcall(function() coroutine.wrap(clientViewModel.Equip)(created, true) end)
+        local spring = rawget(created, "_equip_spring")
+        if spring ~= nil then
+            rawset(spring, "_position0", 0)
+            rawset(spring, "_velocity0", 0)
+        end
+    end })
+    task.delay(0.2, function()
+        CosmeticsWrap.Scene._cwReloading = false
+    end)
+    return true
 end
 
 function CosmeticsWrap.Scene.reloadAll(itemName, selection)
-local fighter = CosmeticsWrap.localFighter()
-if fighter == nil then return false end
-local items = rawget(fighter, "Items")
-if typeof(items) ~= "table" then return false end
-local any = false
-for _, item in pairs(items) do
-if typeof(item) == "table" and rawget(item, "Name") == itemName then
-if CosmeticsWrap.Scene.reloadViewModel(item, itemName, selection) then any = true end
-end
-end
-return any
+    local fighter = CosmeticsWrap.localFighter()
+    if fighter == nil then return false end
+    local items = rawget(fighter, "Items")
+    if typeof(items) ~= "table" then return false end
+    local any = false
+    for _, item in pairs(items) do
+        if typeof(item) == "table" and rawget(item, "Name") == itemName then
+            if CosmeticsWrap.Scene.reloadViewModel(item, itemName, selection) then any = true end
+        end
+    end
+    return any
 end
 
 function CosmeticsWrap.Scene.reloadEquipped()
-local fighter = CosmeticsWrap.localFighter()
-if fighter == nil then return end
-local items = rawget(fighter, "Items")
-if typeof(items) ~= "table" then return end
-for _, item in pairs(items) do
-if typeof(item) == "table" and rawget(item, "IsEquipped") == true then
-local itemName = rawget(item, "Name")
-if itemName ~= nil then
-local selection = CosmeticsWrap.selections[itemName]
-if selection ~= nil then
-CosmeticsWrap.Scene.reloadViewModel(item, itemName, selection)
+    local fighter = CosmeticsWrap.localFighter()
+    if fighter == nil then return end
+    local items = rawget(fighter, "Items")
+    if typeof(items) ~= "table" then return end
+    for _, item in pairs(items) do
+        if typeof(item) == "table" and rawget(item, "IsEquipped") == true then
+            local itemName = rawget(item, "Name")
+            if itemName ~= nil then
+                local selection = CosmeticsWrap.selections[itemName]
+                if selection ~= nil then
+                    CosmeticsWrap.Scene.reloadViewModel(item, itemName, selection)
+                end
+            end
+        end
+    end
 end
+
+-- ===== 파괴 감지 watcher =====
+function CosmeticsWrap.Scene.watchItem(item, itemName)
+    if typeof(item) ~= "table" then return end
+    if rawget(item, "_cwWatcher") ~= nil then return end
+
+    local token = {}
+    rawset(item, "_cwWatcher", token)
+
+    task.spawn(function()
+        local lastVM = rawget(item, "ViewModel")
+        while rawget(item, "_cwWatcher") == token do
+            task.wait(0.05)
+            if rawget(item, "_cwWatcher") ~= token then break end
+            if CosmeticsWrap.Scene._cwReloading then continue end
+
+            local currentVM = rawget(item, "ViewModel")
+            local destroyed = false
+            if currentVM == nil then
+                destroyed = true
+            elseif typeof(currentVM) == "Instance" and currentVM.Parent == nil then
+                destroyed = true
+            end
+
+            if destroyed and lastVM ~= nil then
+                local selection = CosmeticsWrap.selections[itemName]
+                if selection ~= nil then
+                    pcall(function()
+                        CosmeticsWrap.Scene.reloadViewModel(item, itemName, selection)
+                    end)
+                    currentVM = rawget(item, "ViewModel")
+                end
+            end
+            lastVM = currentVM
+        end
+    end)
 end
-end
-end
+
+function CosmeticsWrap.Scene.watchAllItems()
+    local fighter = CosmeticsWrap.localFighter()
+    if fighter == nil then return false end
+    local items = rawget(fighter, "Items")
+    if typeof(items) ~= "table" then return false end
+    local any = false
+    for _, item in pairs(items) do
+        if typeof(item) == "table" and rawget(item, "Name") ~= nil then
+            CosmeticsWrap.Scene.watchItem(item, rawget(item, "Name"))
+            any = true
+        end
+    end
+    return any
 end
 
 function CosmeticsWrap.Scene.refreshEquipmentView()
@@ -575,21 +644,21 @@ CosmeticsWrap.Scene._refreshQueued = false
 function CosmeticsWrap.Scene.requestRefresh()
     if CosmeticsWrap.Scene._refreshQueued then return end
     CosmeticsWrap.Scene._refreshQueued = true
-    task.defer(function()
+    task.spawn(function()
         CosmeticsWrap.Scene._refreshQueued = false
         CosmeticsWrap.Scene.refreshEquipmentView()
     end)
 end
 
 function CosmeticsWrap.Scene.installViewModelProvider()
-    if CosmeticsWrap.Scene._providerInstalled then return end
-    CosmeticsWrap.Scene._providerInstalled = true
+    if CosmeticsWrap.Scene._providerInstalled then return true end
 
     local clientItem = CosmeticsWrap.clientItem()
     if clientItem == nil or type(clientItem._CreateViewModel) ~= "function" then
-        CosmeticsWrap.Scene._providerInstalled = false
-        return
+        return false
     end
+
+    CosmeticsWrap.Scene._providerInstalled = true
 
     local originalCreate = clientItem._CreateViewModel
     CosmeticsWrap.Scene._originalCreate = originalCreate
@@ -641,6 +710,7 @@ function CosmeticsWrap.Scene.installViewModelProvider()
     end
 
     clientItem._CreateViewModel = wrappedCreate
+    return true
 end
 
 function CosmeticsWrap.Scene.uninstallViewModelProvider()
@@ -844,16 +914,41 @@ loadRankProfile()
 
 function CosmeticsWrap.enable()
     if CosmeticsWrap._enabled then return true end
+
+    -- DataHook 초기화 (실패 시 재시도 가능)
     CosmeticsWrap.DataHook.initialize()
-    CosmeticsWrap.Scene.installViewModelProvider()
-    CosmeticsWrap.Scene.installIconProvider()
+
+    -- provider 설치 재시도 루프 (초기 뷰모델부터 커스텀 반영)
+    task.spawn(function()
+        for _ = 1, 120 do
+            CosmeticsWrap.Scene.installViewModelProvider()
+            CosmeticsWrap.Scene.installIconProvider()
+            if CosmeticsWrap.Scene._providerInstalled then break end
+            task.wait(0.25)
+        end
+    end)
+
+    -- LocalFighter 준비되면 초기 반영 + watcher 시작
+    task.spawn(function()
+        for _ = 1, 120 do
+            local fighter = CosmeticsWrap.localFighter()
+            if fighter ~= nil and rawget(fighter, "Items") ~= nil then
+                CosmeticsWrap.applyAll()
+                CosmeticsWrap.Scene.watchAllItems()
+                break
+            end
+            task.wait(0.25)
+        end
+    end)
+
+    -- ItemHook 로드 (실패해도 뷰모델은 동작)
     local ok, err = CosmeticsWrap.ItemHook.load()
     if not ok then
         warn("[CosmeticsWrap] ItemHook load failed: " .. tostring(err))
-        return false
     end
+
     CosmeticsWrap._enabled = true
-    return true
+    return ok
 end
 
 function CosmeticsWrap.disable()
@@ -866,15 +961,9 @@ function CosmeticsWrap.disable()
     return true
 end
 
-CosmeticsWrap._reloadQueued = false
-function CosmeticsWrap._queueReload(weaponName, selection)
-if CosmeticsWrap._reloadQueued then return end
-CosmeticsWrap._reloadQueued = true
-task.defer(function()
-CosmeticsWrap._reloadQueued = false
-CosmeticsWrap.Scene.reloadAll(weaponName, selection)
-CosmeticsWrap.Scene.reloadEquipped()
-end)
+-- 자동 reload 제거 (UI 콜백에서만 명시적으로)
+function CosmeticsWrap._queueReload(_weaponName, _selection)
+    -- no-op: 자동 파괴/재생성 금지
 end
 
 function CosmeticsWrap.syncStateToInput()
@@ -893,7 +982,6 @@ function CosmeticsWrap.set(weaponName, selection)
     CosmeticsWrap.selections[weaponName] = selection
     CosmeticsWrap.DataHook.trigger("WeaponInventory")
     CosmeticsWrap.DataHook.trigger("CosmeticInventory")
-    CosmeticsWrap._queueReload(weaponName, selection)
     CosmeticsWrap.Scene.requestRefresh()
     CosmeticsWrap.syncStateToInput()
 end
@@ -902,17 +990,16 @@ function CosmeticsWrap.clear(weaponName)
     CosmeticsWrap.selections[weaponName] = nil
     CosmeticsWrap.DataHook.trigger("WeaponInventory")
     CosmeticsWrap.DataHook.trigger("CosmeticInventory")
-    CosmeticsWrap._queueReload(weaponName, nil)
     CosmeticsWrap.Scene.requestRefresh()
     CosmeticsWrap.syncStateToInput()
 end
 
 function CosmeticsWrap.applyAll()
-for weaponName, selection in pairs(CosmeticsWrap.selections) do
-CosmeticsWrap.Scene.reloadAll(weaponName, selection)
-end
-CosmeticsWrap.Scene.reloadEquipped()
-CosmeticsWrap.Scene.requestRefresh()
+    for weaponName, selection in pairs(CosmeticsWrap.selections) do
+        CosmeticsWrap.Scene.reloadAll(weaponName, selection)
+    end
+    CosmeticsWrap.Scene.reloadEquipped()
+    CosmeticsWrap.Scene.requestRefresh()
 end
 
 _G.CosmeticsWrap = CosmeticsWrap
@@ -920,11 +1007,21 @@ Hub.CosmeticsWrap = CosmeticsWrap
 
 CosmeticsWrap.enable()
 
+-- CharacterAdded: 1.5초 대기 제거 → 폴링 + 즉시 재적용 + watcher 재등록
 if LocalPlayer.CharacterAdded then
-LocalPlayer.CharacterAdded:Connect(function()
-task.wait(1.5)
-CosmeticsWrap.applyAll()
-end)
+    LocalPlayer.CharacterAdded:Connect(function()
+        task.spawn(function()
+            for _ = 1, 60 do
+                local fighter = CosmeticsWrap.localFighter()
+                if fighter ~= nil and rawget(fighter, "Items") ~= nil then
+                    break
+                end
+                task.wait(0.05)
+            end
+            CosmeticsWrap.applyAll()
+            CosmeticsWrap.Scene.watchAllItems()
+        end)
+    end)
 end
 
 local Cosmetics = Hub.Tabs.Cosmetics
@@ -938,8 +1035,12 @@ end
 local SeasonRankNames = CosmeticsWrap.Rank.RANK_NAMES or {}
 
 local SeasonCharmDrop, SeasonRankDrop, SeasonLeaderboardRank
+local _seasonDebounce = false
 
-local function applySeasonCharm()
+local function applySeasonCharm(force)
+    if _seasonDebounce and not force then return end
+    _seasonDebounce = true
+
     local charmName = SeasonCharmDrop and SeasonCharmDrop.Value
     local rankName = SeasonRankDrop and SeasonRankDrop.Value
     local rawPlace = (SeasonLeaderboardRank and SeasonLeaderboardRank.Value) or ""
@@ -961,6 +1062,7 @@ local function applySeasonCharm()
             end
         end
         CosmeticsWrap.Scene.requestRefresh()
+        _seasonDebounce = false
         return
     end
 
@@ -979,6 +1081,7 @@ local function applySeasonCharm()
             CosmeticsWrap.Scene.requestRefresh()
         end
     end
+    _seasonDebounce = false
 end
 
 SeasonCharmDrop = SeasonCharmOverrideBox:AddDropdown("SeasonCharmOverride", {
@@ -1070,97 +1173,97 @@ local Group = Cosmetics:AddGroupbox({ Name = "Rivals Cosmetics", Side = 1 })
 local NONE_LABEL = "None"
 
 local function collectData()
-local byClass = {}
-local modules = ReplicatedStorage:FindFirstChild("Modules")
-local itemModule = modules and modules:FindFirstChild("ItemLibrary")
-local cosModule = modules and modules:FindFirstChild("CosmeticLibrary")
-if not itemModule or not cosModule then return byClass end
+    local byClass = {}
+    local modules = ReplicatedStorage:FindFirstChild("Modules")
+    local itemModule = modules and modules:FindFirstChild("ItemLibrary")
+    local cosModule = modules and modules:FindFirstChild("CosmeticLibrary")
+    if not itemModule or not cosModule then return byClass end
 
-local okI, itemLib = pcall(require, itemModule)
-local okC, cosLib = pcall(require, cosModule)
-if not okI or not okC then return byClass end
+    local okI, itemLib = pcall(require, itemModule)
+    local okC, cosLib = pcall(require, cosModule)
+    if not okI or not okC then return byClass end
 
-local weaponClass = {}
-for name, data in pairs(itemLib.Items or {}) do
-if type(data) == "table" and data.Class then
-weaponClass[name] = data.Class
-end
-end
+    local weaponClass = {}
+    for name, data in pairs(itemLib.Items or {}) do
+        if type(data) == "table" and data.Class then
+            weaponClass[name] = data.Class
+        end
+    end
 
-local function extractVisual(data, name)
-if type(data) ~= "table" then return nil end
-local image = data.Image
-if type(image) == "string" and image ~= "" then
-return { kind = "image", value = image }
-end
-if type(data.ImageHighResolution) == "string" and data.ImageHighResolution ~= "" then
-return { kind = "image", value = data.ImageHighResolution }
-end
-if data.Type == "Wrap" then
-return { kind = "wrap3d", value = name }
-end
-if data.Type == "Charm" then
-return { kind = "charm3d", charmName = name }
-end
-return { kind = "named", value = name }
-end
+    local function extractVisual(data, name)
+        if type(data) ~= "table" then return nil end
+        local image = data.Image
+        if type(image) == "string" and image ~= "" then
+            return { kind = "image", value = image }
+        end
+        if type(data.ImageHighResolution) == "string" and data.ImageHighResolution ~= "" then
+            return { kind = "image", value = data.ImageHighResolution }
+        end
+        if data.Type == "Wrap" then
+            return { kind = "wrap3d", value = name }
+        end
+        if data.Type == "Charm" then
+            return { kind = "charm3d", charmName = name }
+        end
+        return { kind = "named", value = name }
+    end
 
-local function addEntry(kind, name, visual, weapon)
-if not visual then return end
-local targetWeapon = (kind == "Skin") and weapon or "All"
-if not targetWeapon then return end
-local class = (kind == "Skin")
-and (weaponClass[targetWeapon] or "Other")
-or "All"
-byClass[class] = byClass[class] or {}
-byClass[class][targetWeapon] = byClass[class][targetWeapon] or {}
-byClass[class][targetWeapon][kind] = byClass[class][targetWeapon][kind] or {}
-table.insert(byClass[class][targetWeapon][kind], {
-name = name, visual = visual, kind = kind,
-})
-end
+    local function addEntry(kind, name, visual, weapon)
+        if not visual then return end
+        local targetWeapon = (kind == "Skin") and weapon or "All"
+        if not targetWeapon then return end
+        local class = (kind == "Skin")
+            and (weaponClass[targetWeapon] or "Other")
+            or "All"
+        byClass[class] = byClass[class] or {}
+        byClass[class][targetWeapon] = byClass[class][targetWeapon] or {}
+        byClass[class][targetWeapon][kind] = byClass[class][targetWeapon][kind] or {}
+        table.insert(byClass[class][targetWeapon][kind], {
+            name = name, visual = visual, kind = kind,
+        })
+    end
 
-for name, data in pairs(cosLib.Cosmetics or {}) do
-if type(data) == "table" and data.Type and data.Type ~= "Reward"
-and data.Type ~= "Emote" then
-local visual = extractVisual(data, name)
-if visual then addEntry(data.Type, name, visual, data.ItemName) end
-end
-end
+    for name, data in pairs(cosLib.Cosmetics or {}) do
+        if type(data) == "table" and data.Type and data.Type ~= "Reward"
+            and data.Type ~= "Emote" then
+            local visual = extractVisual(data, name)
+            if visual then addEntry(data.Type, name, visual, data.ItemName) end
+        end
+    end
 
-for _, weaponMap in pairs(byClass) do
-for _, kindMap in pairs(weaponMap) do
-for _, list in pairs(kindMap) do
-table.sort(list, function(a, b) return a.name < b.name end)
-end
-end
-end
+    for _, weaponMap in pairs(byClass) do
+        for _, kindMap in pairs(weaponMap) do
+            for _, list in pairs(kindMap) do
+                table.sort(list, function(a, b) return a.name < b.name end)
+            end
+        end
+    end
 
-return byClass
+    return byClass
 end
 
 local function toAsset(id)
-if type(id) == "number" then return "rbxassetid://" .. id
-elseif type(id) == "string" then
-if id:match("^rbxassetid://") or id:match("^rbxasset://") then return id
-elseif id:match("^%d+$") then return "rbxassetid://" .. id
-end
-return id
-end
-return nil
+    if type(id) == "number" then return "rbxassetid://" .. id
+    elseif type(id) == "string" then
+        if id:match("^rbxassetid://") or id:match("^rbxasset://") then return id
+        elseif id:match("^%d+$") then return "rbxassetid://" .. id
+        end
+        return id
+    end
+    return nil
 end
 
 local byClass = collectData()
 local CLASS_ORDER = { "Primary", "Secondary", "Melee", "Utility" }
 local classNames = {}
 for class in pairs(byClass) do
-if class ~= "All" then table.insert(classNames, class) end
+    if class ~= "All" then table.insert(classNames, class) end
 end
 table.sort(classNames, function(a, b)
-local ai = table.find(CLASS_ORDER, a) or 999
-local bi = table.find(CLASS_ORDER, b) or 999
-if ai ~= bi then return ai < bi end
-return a < b
+    local ai = table.find(CLASS_ORDER, a) or 999
+    local bi = table.find(CLASS_ORDER, b) or 999
+    if ai ~= bi then return ai < bi end
+    return a < b
 end)
 
 if #classNames == 0 then
@@ -1171,71 +1274,71 @@ end
 local KINDS = { "Skin", "Wrap", "Charm", "Finisher" }
 
 local function weaponsOfClass(class)
-local names = {}
-if byClass[class] then
-for weapon in pairs(byClass[class]) do table.insert(names, weapon) end
-end
-table.sort(names)
-return names
+    local names = {}
+    if byClass[class] then
+        for weapon in pairs(byClass[class]) do table.insert(names, weapon) end
+    end
+    table.sort(names)
+    return names
 end
 
 local function kindsOfWeapon(class, weapon)
-local kinds = {}
-if byClass[class] and byClass[class][weapon] then
-for kind in pairs(byClass[class][weapon]) do kinds[kind] = true end
-end
-if byClass["All"] and byClass["All"]["All"] then
-for kind in pairs(byClass["All"]["All"]) do kinds[kind] = true end
-end
-local out = {}
-for kind in pairs(kinds) do table.insert(out, kind) end
-table.sort(out, function(a, b)
-local ai = table.find(KINDS, a) or 999
-local bi = table.find(KINDS, b) or 999
-return ai < bi
-end)
-return out
+    local kinds = {}
+    if byClass[class] and byClass[class][weapon] then
+        for kind in pairs(byClass[class][weapon]) do kinds[kind] = true end
+    end
+    if byClass["All"] and byClass["All"]["All"] then
+        for kind in pairs(byClass["All"]["All"]) do kinds[kind] = true end
+    end
+    local out = {}
+    for kind in pairs(kinds) do table.insert(out, kind) end
+    table.sort(out, function(a, b)
+        local ai = table.find(KINDS, a) or 999
+        local bi = table.find(KINDS, b) or 999
+        return ai < bi
+    end)
+    return out
 end
 
 local function cosmeticsOf(class, weapon, kind)
-local names = { NONE_LABEL }
-if byClass[class] and byClass[class][weapon] and byClass[class][weapon][kind] then
-for _, entry in ipairs(byClass[class][weapon][kind]) do
-table.insert(names, entry.name)
-end
-end
-if byClass["All"] and byClass["All"]["All"] and byClass["All"]["All"][kind] then
-for _, entry in ipairs(byClass["All"]["All"][kind]) do
-table.insert(names, entry.name)
-end
-end
-return names
+    local names = { NONE_LABEL }
+    if byClass[class] and byClass[class][weapon] and byClass[class][weapon][kind] then
+        for _, entry in ipairs(byClass[class][weapon][kind]) do
+            table.insert(names, entry.name)
+        end
+    end
+    if byClass["All"] and byClass["All"]["All"] and byClass["All"]["All"][kind] then
+        for _, entry in ipairs(byClass["All"]["All"][kind]) do
+            table.insert(names, entry.name)
+        end
+    end
+    return names
 end
 
 local function entryByName(class, weapon, kind, name)
-if name == NONE_LABEL then return nil end
-if byClass[class] and byClass[class][weapon] and byClass[class][weapon][kind] then
-for _, entry in ipairs(byClass[class][weapon][kind]) do
-if entry.name == name then return entry end
-end
-end
-if byClass["All"] and byClass["All"]["All"] and byClass["All"]["All"][kind] then
-for _, entry in ipairs(byClass["All"]["All"][kind]) do
-if entry.name == name then return entry end
-end
-end
-return nil
+    if name == NONE_LABEL then return nil end
+    if byClass[class] and byClass[class][weapon] and byClass[class][weapon][kind] then
+        for _, entry in ipairs(byClass[class][weapon][kind]) do
+            if entry.name == name then return entry end
+        end
+    end
+    if byClass["All"] and byClass["All"]["All"] and byClass["All"]["All"][kind] then
+        for _, entry in ipairs(byClass["All"]["All"][kind]) do
+            if entry.name == name then return entry end
+        end
+    end
+    return nil
 end
 
 local function weaponImageOf(class, weapon)
-if not byClass[class] or not byClass[class][weapon] then return nil end
-local skinList = byClass[class][weapon]["Skin"]
-if not skinList or #skinList == 0 then return nil end
-local first = skinList[1]
-if first.visual and first.visual.kind == "image" then
-return first.visual.value
-end
-return nil
+    if not byClass[class] or not byClass[class][weapon] then return nil end
+    local skinList = byClass[class][weapon]["Skin"]
+    if not skinList or #skinList == 0 then return nil end
+    local first = skinList[1]
+    if first.visual and first.visual.kind == "image" then
+        return first.visual.value
+    end
+    return nil
 end
 
 local ClassDropdown, WeaponDropdown, KindDropdown, CosmeticDropdown
@@ -1243,26 +1346,26 @@ local ViewerImage, InfoLabel
 local updateVisual
 
 local function showImage(asset)
-if not ViewerImage then return end
-ViewerImage:SetImage(asset or "rbxassetid://0")
+    if not ViewerImage then return end
+    ViewerImage:SetImage(asset or "rbxassetid://0")
 end
 
 local function setViewerImageVisible(on)
-if not ViewerImage then return end
-if ViewerImage.SetVisible then
-ViewerImage:SetVisible(on)
-elseif ViewerImage.Holder then
-ViewerImage.Holder.Visible = on
-elseif ViewerImage.ImageLabel then
-ViewerImage.ImageLabel.Visible = on
-end
+    if not ViewerImage then return end
+    if ViewerImage.SetVisible then
+        ViewerImage:SetVisible(on)
+    elseif ViewerImage.Holder then
+        ViewerImage.Holder.Visible = on
+    elseif ViewerImage.ImageLabel then
+        ViewerImage.ImageLabel.Visible = on
+    end
 end
 
 ViewerImage = Group:AddImage("ViewerImage", {
-Image = "rbxassetid://0",
-Height = 220,
-ScaleType = Enum.ScaleType.Fit,
-Color = Color3.new(1, 1, 1),
+    Image = "rbxassetid://0",
+    Height = 220,
+    ScaleType = Enum.ScaleType.Fit,
+    Color = Color3.new(1, 1, 1),
 })
 
 local CharmViewport = Instance.new("ViewportFrame")
@@ -1292,47 +1395,47 @@ local charmAutoRotate = true
 local charmRotateSpeed = 0.02
 
 local function loadCharmModel(name)
-local charmAssets = CosmeticsWrap.charmAssets()
-if not charmAssets then return nil end
-local source = charmAssets:FindFirstChild(name)
-if not source then
-for _, child in ipairs(charmAssets:GetChildren()) do
-if string.find(string.lower(child.Name), string.lower(name), 1, true) then
-source = child
-break
-end
-end
-end
-if not source then return nil end
+    local charmAssets = CosmeticsWrap.charmAssets()
+    if not charmAssets then return nil end
+    local source = charmAssets:FindFirstChild(name)
+    if not source then
+        for _, child in ipairs(charmAssets:GetChildren()) do
+            if string.find(string.lower(child.Name), string.lower(name), 1, true) then
+                source = child
+                break
+            end
+        end
+    end
+    if not source then return nil end
 
-local clone = source:Clone()
-local hook = clone:FindFirstChild("Hook", true)
-if hook then hook:Destroy() end
+    local clone = source:Clone()
+    local hook = clone:FindFirstChild("Hook", true)
+    if hook then hook:Destroy() end
 
-local cf, size = clone:GetBoundingBox()
-local maxDim = math.max(size.X, size.Y, size.Z, 0.001)
-local scale = (1 / maxDim) * 1.6
-local ok = pcall(function() clone:ScaleTo(scale) end)
-if not ok then
-for _, part in ipairs(clone:GetDescendants()) do
-if part:IsA("BasePart") then
-part.Size = part.Size * scale
-end
-end
-end
+    local cf, size = clone:GetBoundingBox()
+    local maxDim = math.max(size.X, size.Y, size.Z, 0.001)
+    local scale = (1 / maxDim) * 1.6
+    local ok = pcall(function() clone:ScaleTo(scale) end)
+    if not ok then
+        for _, part in ipairs(clone:GetDescendants()) do
+            if part:IsA("BasePart") then
+                part.Size = part.Size * scale
+            end
+        end
+    end
 
-local newCf = clone:GetBoundingBox()
-clone:PivotTo(CFrame.new(-newCf.Position))
-return clone
+    local newCf = clone:GetBoundingBox()
+    clone:PivotTo(CFrame.new(-newCf.Position))
+    return clone
 end
 
 task.spawn(function()
-while task.wait() do
-if CharmViewport.Visible and charmModel and charmAutoRotate then
-charmSpin = charmSpin + charmRotateSpeed
-charmModel:PivotTo(CFrame.Angles(0, charmSpin, 0))
-end
-end
+    while task.wait() do
+        if CharmViewport.Visible and charmModel and charmAutoRotate then
+            charmSpin = charmSpin + charmRotateSpeed
+            charmModel:PivotTo(CFrame.Angles(0, charmSpin, 0))
+        end
+    end
 end)
 
 local WrapViewport = Instance.new("ViewportFrame")
@@ -1362,269 +1465,272 @@ local wrapAutoRotate = true
 local wrapRotateSpeed = 0.02
 
 local function applyWrapGroups(model, groups)
-if not model or not groups then return end
-local wrapTextureAssets = CosmeticsWrap.wrapTextureAssets()
-for _, obj in ipairs(model:GetDescendants()) do
-if obj:IsA("BasePart") then
-local wrapGroup = obj:GetAttribute("WrapGroup")
-local group = groups[wrapGroup] or groups[1] or {}
-if typeof(group.Color) == "Color3" then obj.Color = group.Color end
-if group.Transparency ~= nil then obj.Transparency = group.Transparency end
-if group.Reflectance ~= nil then obj.Reflectance = group.Reflectance end
-if group.Material then obj.Material = group.Material end
-pcall(function()
-obj.MaterialVariant = group.MaterialVariant or ""
-end)
-if obj:IsA("MeshPart") then
-pcall(function()
-obj.TextureID = ""
-end)
-end
-if group.Textures and wrapTextureAssets then
-local folder = wrapTextureAssets:FindFirstChild(group.Textures)
-if folder then
-for _, texture in ipairs(folder:GetChildren()) do
-pcall(function()
-local clonedTexture = texture:Clone()
-if clonedTexture.LocalTransparencyModifier ~= nil then
-clonedTexture.LocalTransparencyModifier = obj.LocalTransparencyModifier
-end
-clonedTexture.Parent = obj
-end)
-end
-end
-end
-end
-end
+    if not model or not groups then return end
+    local wrapTextureAssets = CosmeticsWrap.wrapTextureAssets()
+    for _, obj in ipairs(model:GetDescendants()) do
+        if obj:IsA("BasePart") then
+            local wrapGroup = obj:GetAttribute("WrapGroup")
+            local group = groups[wrapGroup] or groups[1] or {}
+            if typeof(group.Color) == "Color3" then obj.Color = group.Color end
+            if group.Transparency ~= nil then obj.Transparency = group.Transparency end
+            if group.Reflectance ~= nil then obj.Reflectance = group.Reflectance end
+            if group.Material then obj.Material = group.Material end
+            pcall(function()
+                obj.MaterialVariant = group.MaterialVariant or ""
+            end)
+            if obj:IsA("MeshPart") then
+                pcall(function()
+                    obj.TextureID = ""
+                end)
+            end
+            if group.Textures and wrapTextureAssets then
+                local folder = wrapTextureAssets:FindFirstChild(group.Textures)
+                if folder then
+                    for _, texture in ipairs(folder:GetChildren()) do
+                        pcall(function()
+                            local clonedTexture = texture:Clone()
+                            if clonedTexture.LocalTransparencyModifier ~= nil then
+                                clonedTexture.LocalTransparencyModifier = obj.LocalTransparencyModifier
+                            end
+                            clonedTexture.Parent = obj
+                        end)
+                    end
+                end
+            end
+        end
+    end
 end
 
 local function makeFallbackWrap(groups)
-local model = Instance.new("Model")
-model.Name = "WrapPreview"
-local sliceCount = math.max(1, math.min(3, #groups))
-for i = 1, sliceCount do
-local group = groups[i]
-local color = group and group.Color or Color3.fromRGB(150, 150, 150)
-if typeof(color) ~= "Color3" then color = Color3.fromRGB(150, 150, 150) end
-local slice = Instance.new("Part")
-slice.Anchored = true
-slice.CanCollide = false
-slice.Material = (group and group.Material) or Enum.Material.SmoothPlastic
-slice.Color = color
-slice.Transparency = group and group.Transparency or 0
-slice.Reflectance = group and group.Reflectance or 0
-slice.Size = Vector3.new(1.8 / sliceCount, 1.55, 0.22)
-slice.CFrame = CFrame.new((i - (sliceCount + 1) / 2) * (1.8 / sliceCount), 0, 0)
-slice.Parent = model
-end
-return model
+    local model = Instance.new("Model")
+    model.Name = "WrapPreview"
+    local sliceCount = math.max(1, math.min(3, #groups))
+    for i = 1, sliceCount do
+        local group = groups[i]
+        local color = group and group.Color or Color3.fromRGB(150, 150, 150)
+        if typeof(color) ~= "Color3" then color = Color3.fromRGB(150, 150, 150) end
+        local slice = Instance.new("Part")
+        slice.Anchored = true
+        slice.CanCollide = false
+        slice.Material = (group and group.Material) or Enum.Material.SmoothPlastic
+        slice.Color = color
+        slice.Transparency = group and group.Transparency or 0
+        slice.Reflectance = group and group.Reflectance or 0
+        slice.Size = Vector3.new(1.8 / sliceCount, 1.55, 0.22)
+        slice.CFrame = CFrame.new((i - (sliceCount + 1) / 2) * (1.8 / sliceCount), 0, 0)
+        slice.Parent = model
+    end
+    return model
 end
 
 local function loadWrapModel(name)
-local cosLib = CosmeticsWrap.cosmeticLibrary()
-if not cosLib then return nil end
-local data = cosLib.Cosmetics and cosLib.Cosmetics[name]
-if not data then return nil end
-local groups = data.WrapGroups
-if not groups then return nil end
+    local cosLib = CosmeticsWrap.cosmeticLibrary()
+    if not cosLib then return nil end
+    local data = cosLib.Cosmetics and cosLib.Cosmetics[name]
+    if not data then return nil end
+    local groups = data.WrapGroups
+    if not groups then return nil end
 
-local model = nil
-local wrapPreviewAsset = CosmeticsWrap.wrapPreviewAsset()
-if wrapPreviewAsset then
-local ok, cloned = pcall(function() return wrapPreviewAsset:Clone() end)
-if ok and cloned then
-model = cloned
-end
-end
+    local model = nil
+    local wrapPreviewAsset = CosmeticsWrap.wrapPreviewAsset()
+    if wrapPreviewAsset then
+        local ok, cloned = pcall(function() return wrapPreviewAsset:Clone() end)
+        if ok and cloned then
+            model = cloned
+        end
+    end
 
-if not model then
-model = makeFallbackWrap(groups)
-end
+    if not model then
+        model = makeFallbackWrap(groups)
+    end
 
-applyWrapGroups(model, groups)
+    applyWrapGroups(model, groups)
 
-for _, obj in ipairs(model:GetDescendants()) do
-if obj:IsA("BasePart") then
-obj.Anchored = true
-obj.CanCollide = false
-end
-end
+    for _, obj in ipairs(model:GetDescendants()) do
+        if obj:IsA("BasePart") then
+            obj.Anchored = true
+            obj.CanCollide = false
+        end
+    end
 
-local _, size = model:GetBoundingBox()
-local scale = math.max(size.X, size.Y, size.Z, 0.001)
-model:PivotTo(CFrame.new(0, 0, 0))
-wrapVpCamera.CFrame = CFrame.new(0, 0, math.clamp(scale * 0.95, 1.6, 3.2))
+    local _, size = model:GetBoundingBox()
+    local scale = math.max(size.X, size.Y, size.Z, 0.001)
+    model:PivotTo(CFrame.new(0, 0, 0))
+    wrapVpCamera.CFrame = CFrame.new(0, 0, math.clamp(scale * 0.95, 1.6, 3.2))
 
-return model
+    return model
 end
 
 task.spawn(function()
-while task.wait() do
-if WrapViewport.Visible and wrapModel and wrapAutoRotate then
-wrapSpin = wrapSpin + wrapRotateSpeed
-wrapModel:PivotTo(CFrame.Angles(0, wrapSpin, 0))
-end
-end
+    while task.wait() do
+        if WrapViewport.Visible and wrapModel and wrapAutoRotate then
+            wrapSpin = wrapSpin + wrapRotateSpeed
+            wrapModel:PivotTo(CFrame.Angles(0, wrapSpin, 0))
+        end
+    end
 end)
 
 InfoLabel = Group:AddLabel({ Text = "" })
 InfoLabel.TextLabel.Visible = false
 
 updateVisual = function(class, weapon, kind, name)
-CharmViewport.Visible = false
-WrapViewport.Visible = false
-InfoLabel.TextLabel.Visible = false
-for _, c in ipairs(charmWorld:GetChildren()) do c:Destroy() end
-for _, c in ipairs(wrapVpWorld:GetChildren()) do c:Destroy() end
-charmModel = nil
-wrapModel = nil
+    CharmViewport.Visible = false
+    WrapViewport.Visible = false
+    InfoLabel.TextLabel.Visible = false
+    for _, c in ipairs(charmWorld:GetChildren()) do c:Destroy() end
+    for _, c in ipairs(wrapVpWorld:GetChildren()) do c:Destroy() end
+    charmModel = nil
+    wrapModel = nil
 
-if name == NONE_LABEL or name == nil then
-setViewerImageVisible(true)
-local weaponImg = weaponImageOf(class, weapon)
-showImage(weaponImg and toAsset(weaponImg) or "rbxassetid://0")
-return
-end
+    if name == NONE_LABEL or name == nil then
+        setViewerImageVisible(true)
+        local weaponImg = weaponImageOf(class, weapon)
+        showImage(weaponImg and toAsset(weaponImg) or "rbxassetid://0")
+        return
+    end
 
-local entry = entryByName(class, weapon, kind, name)
-if not entry or not entry.visual then return end
+    local entry = entryByName(class, weapon, kind, name)
+    if not entry or not entry.visual then return end
 
-local v = entry.visual
+    local v = entry.visual
 
-if v.kind == "image" then
-setViewerImageVisible(true)
-showImage(toAsset(v.value))
+    if v.kind == "image" then
+        setViewerImageVisible(true)
+        showImage(toAsset(v.value))
 
-elseif v.kind == "wrap3d" then
-setViewerImageVisible(false)
-local model = loadWrapModel(v.value)
-if model then
-model.Parent = wrapVpWorld
-wrapModel = model
-wrapSpin = 0
-wrapAutoRotate = true
-WrapViewport.Visible = true
-else
-InfoLabel:Set("Wrap: " .. tostring(v.value))
-InfoLabel.TextLabel.Visible = true
-end
+    elseif v.kind == "wrap3d" then
+        setViewerImageVisible(false)
+        local model = loadWrapModel(v.value)
+        if model then
+            model.Parent = wrapVpWorld
+            wrapModel = model
+            wrapSpin = 0
+            wrapAutoRotate = true
+            WrapViewport.Visible = true
+        else
+            InfoLabel:Set("Wrap: " .. tostring(v.value))
+            InfoLabel.TextLabel.Visible = true
+        end
 
-elseif v.kind == "charm3d" then
-setViewerImageVisible(false)
-local model = loadCharmModel(v.charmName)
-if model then
-model.Parent = charmWorld
-charmModel = model
-charmSpin = 0
-charmAutoRotate = true
-CharmViewport.Visible = true
-else
-InfoLabel:Set("Charm: " .. v.charmName .. "\n(no 3D model)")
-InfoLabel.TextLabel.Visible = true
-end
+    elseif v.kind == "charm3d" then
+        setViewerImageVisible(false)
+        local model = loadCharmModel(v.charmName)
+        if model then
+            model.Parent = charmWorld
+            charmModel = model
+            charmSpin = 0
+            charmAutoRotate = true
+            CharmViewport.Visible = true
+        else
+            InfoLabel:Set("Charm: " .. v.charmName .. "\n(no 3D model)")
+            InfoLabel.TextLabel.Visible = true
+        end
 
-elseif v.kind == "named" then
-setViewerImageVisible(true)
-local weaponImg = weaponImageOf(class, weapon)
-showImage(weaponImg and toAsset(weaponImg) or "rbxassetid://0")
-InfoLabel:Set(tostring(kind) .. ": " .. tostring(v.value))
-InfoLabel.TextLabel.Visible = true
-end
+    elseif v.kind == "named" then
+        setViewerImageVisible(true)
+        local weaponImg = weaponImageOf(class, weapon)
+        showImage(weaponImg and toAsset(weaponImg) or "rbxassetid://0")
+        InfoLabel:Set(tostring(kind) .. ": " .. tostring(v.value))
+        InfoLabel.TextLabel.Visible = true
+    end
 end
 
 ClassDropdown = Group:AddDropdown("ClassSelect", {
-Text = "Weapon Type", Values = classNames, Default = classNames[1],
-Multi = false, Searchable = true,
-Callback = function(class)
-local weapons = weaponsOfClass(class)
-if WeaponDropdown then WeaponDropdown:SetValues(weapons) end
-if weapons[1] then
-local kinds = kindsOfWeapon(class, weapons[1])
-if KindDropdown then KindDropdown:SetValues(kinds) end
-if kinds[1] then
-local list = cosmeticsOf(class, weapons[1], kinds[1])
-if CosmeticDropdown then
-CosmeticDropdown:SetValues(list)
-CosmeticDropdown:SetValue(NONE_LABEL)
-end
-updateVisual(class, weapons[1], kinds[1], NONE_LABEL)
-end
-end
-end,
+    Text = "Weapon Type", Values = classNames, Default = classNames[1],
+    Multi = false, Searchable = true,
+    Callback = function(class)
+        local weapons = weaponsOfClass(class)
+        if WeaponDropdown then WeaponDropdown:SetValues(weapons) end
+        if weapons[1] then
+            local kinds = kindsOfWeapon(class, weapons[1])
+            if KindDropdown then KindDropdown:SetValues(kinds) end
+            if kinds[1] then
+                local list = cosmeticsOf(class, weapons[1], kinds[1])
+                if CosmeticDropdown then
+                    CosmeticDropdown:SetValues(list)
+                    CosmeticDropdown:SetValue(NONE_LABEL)
+                end
+                updateVisual(class, weapons[1], kinds[1], NONE_LABEL)
+            end
+        end
+    end,
 })
 
 WeaponDropdown = Group:AddDropdown("WeaponSelect", {
-Text = "Weapon",
-Values = weaponsOfClass(classNames[1]),
-Default = weaponsOfClass(classNames[1])[1],
-Multi = false, Searchable = true,
-Callback = function(weapon)
-local class = ClassDropdown.Value
-local kinds = kindsOfWeapon(class, weapon)
-if KindDropdown then KindDropdown:SetValues(kinds) end
-if kinds[1] then
-local list = cosmeticsOf(class, weapon, kinds[1])
-if CosmeticDropdown then
-CosmeticDropdown:SetValues(list)
-CosmeticDropdown:SetValue(NONE_LABEL)
-end
-updateVisual(class, weapon, kinds[1], NONE_LABEL)
-end
-end,
+    Text = "Weapon",
+    Values = weaponsOfClass(classNames[1]),
+    Default = weaponsOfClass(classNames[1])[1],
+    Multi = false, Searchable = true,
+    Callback = function(weapon)
+        local class = ClassDropdown.Value
+        local kinds = kindsOfWeapon(class, weapon)
+        if KindDropdown then KindDropdown:SetValues(kinds) end
+        if kinds[1] then
+            local list = cosmeticsOf(class, weapon, kinds[1])
+            if CosmeticDropdown then
+                CosmeticDropdown:SetValues(list)
+                CosmeticDropdown:SetValue(NONE_LABEL)
+            end
+            updateVisual(class, weapon, kinds[1], NONE_LABEL)
+        end
+    end,
 })
 
 KindDropdown = Group:AddDropdown("KindSelect", {
-Text = "Cosmetics",
-Values = kindsOfWeapon(classNames[1], weaponsOfClass(classNames[1])[1]),
-Default = kindsOfWeapon(classNames[1], weaponsOfClass(classNames[1])[1])[1],
-Multi = false, Searchable = true,
-Callback = function(kind)
-local class = ClassDropdown.Value
-local weapon = WeaponDropdown.Value
-local list = cosmeticsOf(class, weapon, kind)
-if CosmeticDropdown then
-CosmeticDropdown:SetValues(list)
-CosmeticDropdown:SetValue(NONE_LABEL)
-end
-updateVisual(class, weapon, kind, NONE_LABEL)
-end,
+    Text = "Cosmetics",
+    Values = kindsOfWeapon(classNames[1], weaponsOfClass(classNames[1])[1]),
+    Default = kindsOfWeapon(classNames[1], weaponsOfClass(classNames[1])[1])[1],
+    Multi = false, Searchable = true,
+    Callback = function(kind)
+        local class = ClassDropdown.Value
+        local weapon = WeaponDropdown.Value
+        local list = cosmeticsOf(class, weapon, kind)
+        if CosmeticDropdown then
+            CosmeticDropdown:SetValues(list)
+            CosmeticDropdown:SetValue(NONE_LABEL)
+        end
+        updateVisual(class, weapon, kind, NONE_LABEL)
+    end,
 })
 
 CosmeticDropdown = Group:AddDropdown("CosmeticSelect", {
-Text = "Skin",
-Values = cosmeticsOf(classNames[1], weaponsOfClass(classNames[1])[1],
-kindsOfWeapon(classNames[1], weaponsOfClass(classNames[1])[1])[1]),
-Default = NONE_LABEL,
-Multi = false, Searchable = true,
-Callback = function(name)
-local class = ClassDropdown.Value
-local weapon = WeaponDropdown.Value
-local kind = KindDropdown.Value
-updateVisual(class, weapon, kind, name)
-end,
+    Text = "Skin",
+    Values = cosmeticsOf(classNames[1], weaponsOfClass(classNames[1])[1],
+        kindsOfWeapon(classNames[1], weaponsOfClass(classNames[1])[1])[1]),
+    Default = NONE_LABEL,
+    Multi = false, Searchable = true,
+    Callback = function(name)
+        local class = ClassDropdown.Value
+        local weapon = WeaponDropdown.Value
+        local kind = KindDropdown.Value
+        updateVisual(class, weapon, kind, name)
+    end,
 })
 
 Group:AddButton("Apply", function()
-local weapon = WeaponDropdown.Value
-local kind = KindDropdown.Value
-local name = CosmeticDropdown.Value
-if not weapon or weapon == "All" then return end
-local selection = CosmeticsWrap.selections[weapon] or {}
-local slot = string.lower(kind)
-if name == NONE_LABEL or name == nil then
-selection[slot] = nil
-else
-if kind == "Wrap" then
-selection.wrap = { name = name, inverted = false }
-else
-selection[slot] = name
-end
-end
-if next(selection) == nil then
-CosmeticsWrap.clear(weapon)
-else
-CosmeticsWrap.set(weapon, selection)
-end
+    local weapon = WeaponDropdown.Value
+    local kind = KindDropdown.Value
+    local name = CosmeticDropdown.Value
+    if not weapon or weapon == "All" then return end
+    local selection = CosmeticsWrap.selections[weapon] or {}
+    local slot = string.lower(kind)
+    if name == NONE_LABEL or name == nil then
+        selection[slot] = nil
+    else
+        if kind == "Wrap" then
+            selection.wrap = { name = name, inverted = false }
+        else
+            selection[slot] = name
+        end
+    end
+    if next(selection) == nil then
+        CosmeticsWrap.clear(weapon)
+    else
+        CosmeticsWrap.set(weapon, selection)
+    end
+    -- UI 조작 시에만 명시적 파괴/재생성
+    CosmeticsWrap.Scene.reloadAll(weapon, selection)
+    CosmeticsWrap.Scene.reloadEquipped()
 end)
 
 Group:AddButton("Apply To All Weapons", function()
@@ -1671,23 +1777,23 @@ Group:AddButton("Apply To All Weapons", function()
 end)
 
 Group:AddButton("Reset All", function()
-for weapon in pairs(CosmeticsWrap.selections) do
-CosmeticsWrap.clear(weapon)
-end
+    for weapon in pairs(CosmeticsWrap.selections) do
+        CosmeticsWrap.clear(weapon)
+    end
 end)
 
 task.defer(function()
-local firstClass = classNames[1]
-local firstWeapon = weaponsOfClass(firstClass)[1]
-if firstWeapon then
-local kinds = kindsOfWeapon(firstClass, firstWeapon)
-if kinds[1] then
-if CosmeticDropdown then
-CosmeticDropdown:SetValue(NONE_LABEL)
-end
-updateVisual(firstClass, firstWeapon, kinds[1], NONE_LABEL)
-end
-end
+    local firstClass = classNames[1]
+    local firstWeapon = weaponsOfClass(firstClass)[1]
+    if firstWeapon then
+        local kinds = kindsOfWeapon(firstClass, firstWeapon)
+        if kinds[1] then
+            if CosmeticDropdown then
+                CosmeticDropdown:SetValue(NONE_LABEL)
+            end
+            updateVisual(firstClass, firstWeapon, kinds[1], NONE_LABEL)
+        end
+    end
 end)
 
 return true
