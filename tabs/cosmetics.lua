@@ -5,6 +5,8 @@ local Players           = Hub.Players
 local ReplicatedStorage = Hub.ReplicatedStorage
 local LocalPlayer       = Hub.LocalPlayer
 
+local RunService = game:GetService("RunService")
+
 local CosmeticsWrap = {}
 CosmeticsWrap._cache = {}
 
@@ -131,7 +133,7 @@ function CosmeticsWrap.DataHook.load(current)
     if inner == nil then return false end
     if hook.restore ~= nil then
         if hook.restore.current == current then return true end
-        CosmeticsWrap.DataHook.revert()
+        CosmeticsWrap.DataHook._revert()
     end
     local proxy = setmetatable({}, {
         __index = function(_, key)
@@ -377,6 +379,8 @@ CosmeticsWrap.Scene = {
     _objectsCache = nil,
     _objectsCacheTime = 0,
     _cwReloading = false,
+    _watchers = {},
+    _watcherRunning = false,
 }
 
 function CosmeticsWrap.Scene.thunk(object, methodName)
@@ -410,7 +414,7 @@ end
 
 function CosmeticsWrap.Scene.objects()
     local now = os.clock()
-    if CosmeticsWrap.Scene._objectsCache and now - CosmeticsWrap.Scene._objectsCacheTime < 0.5 then
+    if CosmeticsWrap.Scene._objectsCache and now - CosmeticsWrap.Scene._objectsCacheTime < 2 then
         return CosmeticsWrap.Scene._objectsCache
     end
     local out = {}
@@ -512,7 +516,6 @@ function CosmeticsWrap.Scene.reloadViewModel(item, itemName, selection)
                     CosmeticsWrap.Scene.buildViewModelData(itemName, nil))
             end)
             if created ~= nil then rawset(item, "ViewModel", created) end
-            CosmeticsWrap.Scene._cwReloading = false
             return
         end
         rawset(item, "ViewModel", created)
@@ -535,7 +538,7 @@ function CosmeticsWrap.Scene.reloadViewModel(item, itemName, selection)
             rawset(spring, "_velocity0", 0)
         end
     end })
-    task.delay(0.2, function()
+    task.defer(function()
         CosmeticsWrap.Scene._cwReloading = false
     end)
     return true
@@ -573,39 +576,46 @@ function CosmeticsWrap.Scene.reloadEquipped()
     end
 end
 
--- ===== 파괴 감지 watcher =====
+-- ===== 파괴 감지 watcher (단일 Heartbeat + 0.25초 스로틀) =====
 function CosmeticsWrap.Scene.watchItem(item, itemName)
     if typeof(item) ~= "table" then return end
-    if rawget(item, "_cwWatcher") ~= nil then return end
+    if CosmeticsWrap.Scene._watchers[item] ~= nil then return end
+    CosmeticsWrap.Scene._watchers[item] = {
+        name = itemName,
+        lastVM = rawget(item, "ViewModel"),
+    }
+end
 
-    local token = {}
-    rawset(item, "_cwWatcher", token)
+function CosmeticsWrap.Scene._startWatcherLoop()
+    if CosmeticsWrap.Scene._watcherRunning then return end
+    CosmeticsWrap.Scene._watcherRunning = true
 
-    task.spawn(function()
-        local lastVM = rawget(item, "ViewModel")
-        while rawget(item, "_cwWatcher") == token do
-            task.wait(0.05)
-            if rawget(item, "_cwWatcher") ~= token then break end
-            if CosmeticsWrap.Scene._cwReloading then continue end
+    local acc = 0
+    RunService.Heartbeat:Connect(function(dt)
+        acc += dt
+        if acc < 0.25 then return end
+        acc = 0
 
-            local currentVM = rawget(item, "ViewModel")
-            local destroyed = false
-            if currentVM == nil then
-                destroyed = true
-            elseif typeof(currentVM) == "Instance" and currentVM.Parent == nil then
-                destroyed = true
-            end
+        if CosmeticsWrap.Scene._cwReloading then return end
 
-            if destroyed and lastVM ~= nil then
-                local selection = CosmeticsWrap.selections[itemName]
+        for item, state in pairs(CosmeticsWrap.Scene._watchers) do
+            local vm = rawget(item, "ViewModel")
+            local destroyed = (vm == nil)
+                or (typeof(vm) == "Instance" and vm.Parent == nil)
+
+            if destroyed and state.lastVM ~= nil then
+                local selection = CosmeticsWrap.selections[state.name]
                 if selection ~= nil then
                     pcall(function()
-                        CosmeticsWrap.Scene.reloadViewModel(item, itemName, selection)
+                        CosmeticsWrap.Scene.reloadViewModel(item, state.name, selection)
                     end)
-                    currentVM = rawget(item, "ViewModel")
+                    state.lastVM = rawget(item, "ViewModel")
+                else
+                    state.lastVM = nil
                 end
+            else
+                state.lastVM = vm
             end
-            lastVM = currentVM
         end
     end)
 end
@@ -615,14 +625,22 @@ function CosmeticsWrap.Scene.watchAllItems()
     if fighter == nil then return false end
     local items = rawget(fighter, "Items")
     if typeof(items) ~= "table" then return false end
-    local any = false
+
+    -- 죽은 참조 정리
+    for item in pairs(CosmeticsWrap.Scene._watchers) do
+        if typeof(item) ~= "table" then
+            CosmeticsWrap.Scene._watchers[item] = nil
+        end
+    end
+
     for _, item in pairs(items) do
         if typeof(item) == "table" and rawget(item, "Name") ~= nil then
             CosmeticsWrap.Scene.watchItem(item, rawget(item, "Name"))
-            any = true
         end
     end
-    return any
+
+    CosmeticsWrap.Scene._startWatcherLoop()
+    return true
 end
 
 function CosmeticsWrap.Scene.refreshEquipmentView()
@@ -645,6 +663,7 @@ function CosmeticsWrap.Scene.requestRefresh()
     if CosmeticsWrap.Scene._refreshQueued then return end
     CosmeticsWrap.Scene._refreshQueued = true
     task.spawn(function()
+        task.wait(0.1)
         CosmeticsWrap.Scene._refreshQueued = false
         CosmeticsWrap.Scene.refreshEquipmentView()
     end)
@@ -915,10 +934,9 @@ loadRankProfile()
 function CosmeticsWrap.enable()
     if CosmeticsWrap._enabled then return true end
 
-    -- DataHook 초기화 (실패 시 재시도 가능)
     CosmeticsWrap.DataHook.initialize()
 
-    -- provider 설치 재시도 루프 (초기 뷰모델부터 커스텀 반영)
+    -- provider 설치 재시도
     task.spawn(function()
         for _ = 1, 120 do
             CosmeticsWrap.Scene.installViewModelProvider()
@@ -928,7 +946,7 @@ function CosmeticsWrap.enable()
         end
     end)
 
-    -- LocalFighter 준비되면 초기 반영 + watcher 시작
+    -- 초기 반영: LocalFighter 준비되면 즉시 1프레임에 전부 반영
     task.spawn(function()
         for _ = 1, 120 do
             local fighter = CosmeticsWrap.localFighter()
@@ -941,7 +959,6 @@ function CosmeticsWrap.enable()
         end
     end)
 
-    -- ItemHook 로드 (실패해도 뷰모델은 동작)
     local ok, err = CosmeticsWrap.ItemHook.load()
     if not ok then
         warn("[CosmeticsWrap] ItemHook load failed: " .. tostring(err))
@@ -959,11 +976,6 @@ function CosmeticsWrap.disable()
     CosmeticsWrap.DataHook.destroy()
     CosmeticsWrap._enabled = false
     return true
-end
-
--- 자동 reload 제거 (UI 콜백에서만 명시적으로)
-function CosmeticsWrap._queueReload(_weaponName, _selection)
-    -- no-op: 자동 파괴/재생성 금지
 end
 
 function CosmeticsWrap.syncStateToInput()
@@ -1007,7 +1019,7 @@ Hub.CosmeticsWrap = CosmeticsWrap
 
 CosmeticsWrap.enable()
 
--- CharacterAdded: 1.5초 대기 제거 → 폴링 + 즉시 재적용 + watcher 재등록
+-- CharacterAdded: 즉시 폴링 후 반영 + watcher 재등록
 if LocalPlayer.CharacterAdded then
     LocalPlayer.CharacterAdded:Connect(function()
         task.spawn(function()
@@ -1037,9 +1049,10 @@ local SeasonRankNames = CosmeticsWrap.Rank.RANK_NAMES or {}
 local SeasonCharmDrop, SeasonRankDrop, SeasonLeaderboardRank
 local _seasonDebounce = false
 
-local function applySeasonCharm(force)
-    if _seasonDebounce and not force then return end
+local function applySeasonCharm()
+    if _seasonDebounce then return end
     _seasonDebounce = true
+    task.defer(function() _seasonDebounce = false end)
 
     local charmName = SeasonCharmDrop and SeasonCharmDrop.Value
     local rankName = SeasonRankDrop and SeasonRankDrop.Value
@@ -1062,7 +1075,6 @@ local function applySeasonCharm(force)
             end
         end
         CosmeticsWrap.Scene.requestRefresh()
-        _seasonDebounce = false
         return
     end
 
@@ -1081,7 +1093,6 @@ local function applySeasonCharm(force)
             CosmeticsWrap.Scene.requestRefresh()
         end
     end
-    _seasonDebounce = false
 end
 
 SeasonCharmDrop = SeasonCharmOverrideBox:AddDropdown("SeasonCharmOverride", {
