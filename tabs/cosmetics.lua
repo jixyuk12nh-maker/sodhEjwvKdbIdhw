@@ -626,7 +626,6 @@ function CosmeticsWrap.Scene.watchAllItems()
     local items = rawget(fighter, "Items")
     if typeof(items) ~= "table" then return false end
 
-    -- 죽은 참조 정리
     for item in pairs(CosmeticsWrap.Scene._watchers) do
         if typeof(item) ~= "table" then
             CosmeticsWrap.Scene._watchers[item] = nil
@@ -936,17 +935,24 @@ function CosmeticsWrap.enable()
 
     CosmeticsWrap.DataHook.initialize()
 
-    -- provider 설치 재시도
+    -- provider 설치 재시도 + 성공 즉시 applyAll
     task.spawn(function()
         for _ = 1, 120 do
             CosmeticsWrap.Scene.installViewModelProvider()
             CosmeticsWrap.Scene.installIconProvider()
-            if CosmeticsWrap.Scene._providerInstalled then break end
+            if CosmeticsWrap.Scene._providerInstalled then
+                task.wait(0.1)
+                pcall(function()
+                    CosmeticsWrap.applyAll()
+                    CosmeticsWrap.Scene.watchAllItems()
+                end)
+                break
+            end
             task.wait(0.25)
         end
     end)
 
-    -- 초기 반영: LocalFighter 준비되면 즉시 1프레임에 전부 반영
+    -- LocalFighter 준비되면 즉시 반영 + watcher 시작
     task.spawn(function()
         for _ = 1, 120 do
             local fighter = CosmeticsWrap.localFighter()
@@ -978,10 +984,15 @@ function CosmeticsWrap.disable()
     return true
 end
 
+-- ★ 시즌 참 오버라이드도 함께 저장
 function CosmeticsWrap.syncStateToInput()
     if not CosmeticsWrap._stateInput then return end
+    local payload = {
+        selections = CosmeticsWrap.selections,
+        rankCharm  = CosmeticsWrap.RankCharm._overrides or {},
+    }
     local ok, encoded = pcall(function()
-        return game:GetService("HttpService"):JSONEncode(CosmeticsWrap.selections)
+        return game:GetService("HttpService"):JSONEncode(payload)
     end)
     if ok and encoded then
         pcall(function()
@@ -1019,7 +1030,6 @@ Hub.CosmeticsWrap = CosmeticsWrap
 
 CosmeticsWrap.enable()
 
--- CharacterAdded: 즉시 폴링 후 반영 + watcher 재등록
 if LocalPlayer.CharacterAdded then
     LocalPlayer.CharacterAdded:Connect(function()
         task.spawn(function()
@@ -1038,6 +1048,9 @@ end
 
 local Cosmetics = Hub.Tabs.Cosmetics
 
+-- ============================================================
+-- Season Charm Override
+-- ============================================================
 local SeasonCharmOverrideBox = Cosmetics:AddGroupbox({ Name = "Season Charm Override", Side = 2 })
 
 local SeasonCharmNames = { "None" }
@@ -1047,13 +1060,9 @@ end
 local SeasonRankNames = CosmeticsWrap.Rank.RANK_NAMES or {}
 
 local SeasonCharmDrop, SeasonRankDrop, SeasonLeaderboardRank
-local _seasonDebounce = false
+local _seasonDebounceThread = nil
 
-local function applySeasonCharm()
-    if _seasonDebounce then return end
-    _seasonDebounce = true
-    task.defer(function() _seasonDebounce = false end)
-
+local function applySeasonCharmNow()
     local charmName = SeasonCharmDrop and SeasonCharmDrop.Value
     local rankName = SeasonRankDrop and SeasonRankDrop.Value
     local rawPlace = (SeasonLeaderboardRank and SeasonLeaderboardRank.Value) or ""
@@ -1075,6 +1084,7 @@ local function applySeasonCharm()
             end
         end
         CosmeticsWrap.Scene.requestRefresh()
+        CosmeticsWrap.syncStateToInput()
         return
     end
 
@@ -1091,8 +1101,19 @@ local function applySeasonCharm()
                 end
             end
             CosmeticsWrap.Scene.requestRefresh()
+            CosmeticsWrap.syncStateToInput()
         end
     end
+end
+
+local function applySeasonCharm()
+    if _seasonDebounceThread then
+        task.cancel(_seasonDebounceThread)
+    end
+    _seasonDebounceThread = task.delay(0.3, function()
+        _seasonDebounceThread = nil
+        applySeasonCharmNow()
+    end)
 end
 
 SeasonCharmDrop = SeasonCharmOverrideBox:AddDropdown("SeasonCharmOverride", {
@@ -1136,6 +1157,9 @@ task.spawn(function()
     end
 end)
 
+-- ============================================================
+-- State Holder (숨김)
+-- ============================================================
 local CosmeticsStateHolder = Cosmetics:AddGroupbox({ Name = "StateData", Side = 2 })
 
 CosmeticsWrap._stateInput = CosmeticsStateHolder:AddInput("CosmeticsState", {
@@ -1163,23 +1187,42 @@ task.spawn(function()
     end
 end)
 
+-- ★ 즉시 시도 + 폴링 (기존 7초 대기 제거)
 task.spawn(function()
-    task.wait(7)
-    local input = CosmeticsWrap._stateInput
-    if not input then return end
-    local raw = input.Value
-    if not raw or raw == "" then return end
-    local ok, decoded = pcall(function()
-        return game:GetService("HttpService"):JSONDecode(raw)
-    end)
-    if ok and type(decoded) == "table" then
-        CosmeticsWrap.selections = decoded
-        task.wait(1)
+    local function tryLoad()
+        local input = CosmeticsWrap._stateInput
+        if not input then return false end
+        local raw = input.Value
+        if not raw or raw == "" then return false end
+        local ok, decoded = pcall(function()
+            return game:GetService("HttpService"):JSONDecode(raw)
+        end)
+        if not ok or type(decoded) ~= "table" then return false end
+
+        if decoded.selections ~= nil then
+            CosmeticsWrap.selections = decoded.selections
+        else
+            -- 예전 포맷(selections만) 호환
+            CosmeticsWrap.selections = decoded
+        end
+        if decoded.rankCharm ~= nil and type(decoded.rankCharm) == "table" then
+            CosmeticsWrap.RankCharm._overrides = decoded.rankCharm
+        end
+
         CosmeticsWrap.applyAll()
         print("[Cosmetics] Loaded saved state")
+        return true
+    end
+
+    for _ = 1, 40 do
+        if tryLoad() then return end
+        task.wait(0.25)
     end
 end)
 
+-- ============================================================
+-- Cosmetics Group
+-- ============================================================
 local Group = Cosmetics:AddGroupbox({ Name = "Rivals Cosmetics", Side = 1 })
 local NONE_LABEL = "None"
 
@@ -1250,7 +1293,7 @@ local function collectData()
         end
     end
 
-    return byClass
+    return byClass, itemLib, cosLib
 end
 
 local function toAsset(id)
@@ -1264,7 +1307,7 @@ local function toAsset(id)
     return nil
 end
 
-local byClass = collectData()
+local byClass, itemLibRef, cosLibRef = collectData()
 local CLASS_ORDER = { "Primary", "Secondary", "Melee", "Utility" }
 local classNames = {}
 for class in pairs(byClass) do
@@ -1280,6 +1323,12 @@ end)
 if #classNames == 0 then
     Group:AddLabel("No cosmetic data found.")
     return true
+end
+
+-- ★ 주무기(Primary) 기본
+local DEFAULT_CLASS = "Primary"
+if not table.find(classNames, DEFAULT_CLASS) then
+    DEFAULT_CLASS = classNames[1]
 end
 
 local KINDS = { "Skin", "Wrap", "Charm", "Finisher" }
@@ -1301,6 +1350,9 @@ local function kindsOfWeapon(class, weapon)
     if byClass["All"] and byClass["All"]["All"] then
         for kind in pairs(byClass["All"]["All"]) do kinds[kind] = true end
     end
+    -- ★ 4종 강제 포함 (None만이라도 선택 가능)
+    for _, k in ipairs(KINDS) do kinds[k] = true end
+
     local out = {}
     for kind in pairs(kinds) do table.insert(out, kind) end
     table.sort(out, function(a, b)
@@ -1341,13 +1393,19 @@ local function entryByName(class, weapon, kind, name)
     return nil
 end
 
-local function weaponImageOf(class, weapon)
-    if not byClass[class] or not byClass[class][weapon] then return nil end
-    local skinList = byClass[class][weapon]["Skin"]
-    if not skinList or #skinList == 0 then return nil end
-    local first = skinList[1]
-    if first.visual and first.visual.kind == "image" then
-        return first.visual.value
+-- ★ 기본 스킨 이미지 (ItemLibrary 우선)
+local function defaultWeaponImage(weapon)
+    if itemLibRef and itemLibRef.Items then
+        local itemData = itemLibRef.Items[weapon]
+        if type(itemData) == "table" then
+            if type(itemData.Image) == "string" and itemData.Image ~= "" then
+                return itemData.Image
+            end
+            if type(itemData.ImageHighResolution) == "string"
+                and itemData.ImageHighResolution ~= "" then
+                return itemData.ImageHighResolution
+            end
+        end
     end
     return nil
 end
@@ -1379,6 +1437,7 @@ ViewerImage = Group:AddImage("ViewerImage", {
     Color = Color3.new(1, 1, 1),
 })
 
+-- Charm 뷰포트
 local CharmViewport = Instance.new("ViewportFrame")
 CharmViewport.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 CharmViewport.BorderSizePixel = 0
@@ -1449,6 +1508,7 @@ task.spawn(function()
     end
 end)
 
+-- Wrap 뷰포트
 local WrapViewport = Instance.new("ViewportFrame")
 WrapViewport.BackgroundColor3 = Color3.fromRGB(20, 20, 25)
 WrapViewport.BorderSizePixel = 0
@@ -1593,10 +1653,20 @@ updateVisual = function(class, weapon, kind, name)
     charmModel = nil
     wrapModel = nil
 
+    -- ★ None → 기본 무기 이미지
     if name == NONE_LABEL or name == nil then
         setViewerImageVisible(true)
-        local weaponImg = weaponImageOf(class, weapon)
-        showImage(weaponImg and toAsset(weaponImg) or "rbxassetid://0")
+        local img = defaultWeaponImage(weapon)
+        if not img then
+            -- 폴백: 스킨 리스트 첫 이미지
+            if byClass[class] and byClass[class][weapon] and byClass[class][weapon]["Skin"] then
+                local list = byClass[class][weapon]["Skin"]
+                if list[1] and list[1].visual and list[1].visual.kind == "image" then
+                    img = list[1].visual.value
+                end
+            end
+        end
+        showImage(img and toAsset(img) or "rbxassetid://0")
         return
     end
 
@@ -1639,15 +1709,30 @@ updateVisual = function(class, weapon, kind, name)
 
     elseif v.kind == "named" then
         setViewerImageVisible(true)
-        local weaponImg = weaponImageOf(class, weapon)
-        showImage(weaponImg and toAsset(weaponImg) or "rbxassetid://0")
+        local img = defaultWeaponImage(weapon)
+        if not img then
+            if byClass[class] and byClass[class][weapon] and byClass[class][weapon]["Skin"] then
+                local list = byClass[class][weapon]["Skin"]
+                if list[1] and list[1].visual and list[1].visual.kind == "image" then
+                    img = list[1].visual.value
+                end
+            end
+        end
+        showImage(img and toAsset(img) or "rbxassetid://0")
         InfoLabel:Set(tostring(kind) .. ": " .. tostring(v.value))
         InfoLabel.TextLabel.Visible = true
     end
 end
 
+-- ============================================================
+-- 드롭다운 (초기값 = 주무기 Primary 첫 무기)
+-- ============================================================
+local DEFAULT_WEAPON = weaponsOfClass(DEFAULT_CLASS)[1]
+local DEFAULT_KINDS  = kindsOfWeapon(DEFAULT_CLASS, DEFAULT_WEAPON)
+local DEFAULT_KIND   = DEFAULT_KINDS[1]
+
 ClassDropdown = Group:AddDropdown("ClassSelect", {
-    Text = "Weapon Type", Values = classNames, Default = classNames[1],
+    Text = "Weapon Type", Values = classNames, Default = DEFAULT_CLASS,
     Multi = false, Searchable = true,
     Callback = function(class)
         local weapons = weaponsOfClass(class)
@@ -1669,8 +1754,8 @@ ClassDropdown = Group:AddDropdown("ClassSelect", {
 
 WeaponDropdown = Group:AddDropdown("WeaponSelect", {
     Text = "Weapon",
-    Values = weaponsOfClass(classNames[1]),
-    Default = weaponsOfClass(classNames[1])[1],
+    Values = weaponsOfClass(DEFAULT_CLASS),
+    Default = DEFAULT_WEAPON,
     Multi = false, Searchable = true,
     Callback = function(weapon)
         local class = ClassDropdown.Value
@@ -1689,8 +1774,8 @@ WeaponDropdown = Group:AddDropdown("WeaponSelect", {
 
 KindDropdown = Group:AddDropdown("KindSelect", {
     Text = "Cosmetics",
-    Values = kindsOfWeapon(classNames[1], weaponsOfClass(classNames[1])[1]),
-    Default = kindsOfWeapon(classNames[1], weaponsOfClass(classNames[1])[1])[1],
+    Values = DEFAULT_KINDS,
+    Default = DEFAULT_KIND,
     Multi = false, Searchable = true,
     Callback = function(kind)
         local class = ClassDropdown.Value
@@ -1706,8 +1791,7 @@ KindDropdown = Group:AddDropdown("KindSelect", {
 
 CosmeticDropdown = Group:AddDropdown("CosmeticSelect", {
     Text = "Skin",
-    Values = cosmeticsOf(classNames[1], weaponsOfClass(classNames[1])[1],
-        kindsOfWeapon(classNames[1], weaponsOfClass(classNames[1])[1])[1]),
+    Values = cosmeticsOf(DEFAULT_CLASS, DEFAULT_WEAPON, DEFAULT_KIND),
     Default = NONE_LABEL,
     Multi = false, Searchable = true,
     Callback = function(name)
@@ -1718,6 +1802,9 @@ CosmeticDropdown = Group:AddDropdown("CosmeticSelect", {
     end,
 })
 
+-- ============================================================
+-- Apply 버튼들
+-- ============================================================
 Group:AddButton("Apply", function()
     local weapon = WeaponDropdown.Value
     local kind = KindDropdown.Value
@@ -1739,7 +1826,6 @@ Group:AddButton("Apply", function()
     else
         CosmeticsWrap.set(weapon, selection)
     end
-    -- UI 조작 시에만 명시적 파괴/재생성
     CosmeticsWrap.Scene.reloadAll(weapon, selection)
     CosmeticsWrap.Scene.reloadEquipped()
 end)
@@ -1793,17 +1879,13 @@ Group:AddButton("Reset All", function()
     end
 end)
 
+-- 초기 뷰어 세팅: 주무기 + None
 task.defer(function()
-    local firstClass = classNames[1]
-    local firstWeapon = weaponsOfClass(firstClass)[1]
-    if firstWeapon then
-        local kinds = kindsOfWeapon(firstClass, firstWeapon)
-        if kinds[1] then
-            if CosmeticDropdown then
-                CosmeticDropdown:SetValue(NONE_LABEL)
-            end
-            updateVisual(firstClass, firstWeapon, kinds[1], NONE_LABEL)
+    if DEFAULT_WEAPON then
+        if CosmeticDropdown then
+            CosmeticDropdown:SetValue(NONE_LABEL)
         end
+        updateVisual(DEFAULT_CLASS, DEFAULT_WEAPON, DEFAULT_KIND, NONE_LABEL)
     end
 end)
 
