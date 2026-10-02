@@ -5,16 +5,6 @@ if not Hub then return end
 local Settings = Hub.Tabs.Settings
 local LocalPlayer = Hub.LocalPlayer
 
---============================================================--
--- SILENT LOAD: UI가 준비될 때까지 조용히 대기
---============================================================--
-if Hub.Library and Hub.Library.Window and Hub.Library.Window.MainFrame then
-    Hub.Library.Window.MainFrame.Visible = false
-    if Hub.Library.Toggled then
-        Hub.Library.Toggled = false
-    end
-end
-
 local SettingsBox = Settings:AddGroupbox({ Name = "Keybinds", Side = 1 })
 
 SettingsBox:AddCheckbox("ShowKeybindsWindow", {
@@ -28,17 +18,25 @@ SettingsBox:AddCheckbox("ShowKeybindsWindow", {
 })
 
 --============================================================--
--- AUTO LOAD: SaveManager로 저장된 설정 자동 로드
+-- AUTO LOAD + SILENT LOAD (Keybinds 그룹박스 안)
 --============================================================--
+
+-- SILENT LOAD: UI 조용히 숨김
+if Hub.Library and Hub.Library.Window and Hub.Library.Window.MainFrame then
+    Hub.Library.Window.MainFrame.Visible = false
+    if Hub.Library.Toggled then
+        Hub.Library.Toggled = false
+    end
+end
+
+-- AUTO LOAD: 저장된 설정 자동 로드
 if Hub.SaveManager then
     Hub.SaveManager:SetLibrary(Hub.Library)
     Hub.SaveManager:BuildConfigSection(Settings, "folder-cog")
     Hub.SaveManager:LoadAutoloadConfig()
 end
 
---============================================================--
--- AUTO EXECUTE: autoexec 폴더의 스크립트 자동 실행
---============================================================--
+-- AUTO EXECUTE: autoexec 폴더 스크립트 자동 실행
 do
     local AUTOEXEC_FOLDER = "MinhoHub/autoexec"
 
@@ -82,6 +80,8 @@ do
 
     task.spawn(runAutoexec)
 end
+
+--============================================================--
 
 LocalPlayer.AncestryChanged:Connect(function()
     if not LocalPlayer:IsDescendantOf(game) then
