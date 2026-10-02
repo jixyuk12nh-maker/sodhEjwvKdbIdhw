@@ -45,33 +45,57 @@ end
 
 local SettingsBox = Settings:AddGroupbox({ Name = "Keybinds", Side = 1 })
 
-SettingsBox:AddCheckbox("ShowKeybindsWindow", {
-    Text = "Show Keybinds Window",
-    Default = false,
-    Callback = function(Value)
-        if Hub.Library.KeybindFrame then
-            Hub.Library.KeybindFrame.Visible = Value
+-- ============================================================
+-- 1) Show Keybinds Window
+-- ============================================================
+local ok1, err1 = pcall(function()
+    SettingsBox:AddCheckbox("ShowKeybindsWindow", {
+        Text = "Show Keybinds Window",
+        Default = false,
+        Callback = function(Value)
+            if Hub.Library and Hub.Library.KeybindFrame then
+                Hub.Library.KeybindFrame.Visible = Value
+            end
         end
-    end
-})
-
-SettingsBox:AddCheckbox("AutoExecute", {
-    Text = "Auto Execute",
-    Default = false,
-    Callback = function(Value)
-        saveAutoExecFlag(Value)
-        if Value then
-            runAutoLoad()
-        end
-    end
-})
-
-if Hub.SaveManager then
-    Hub.SaveManager:SetLibrary(Hub.Library)
-    Hub.SaveManager:BuildConfigSection(Settings, "folder-cog")
-    Hub.SaveManager:LoadAutoloadConfig()
+    })
+end)
+if not ok1 then
+    warn("[MinhoHub] Show Keybinds Window 체크박스 추가 실패:", err1)
 end
 
+-- ============================================================
+-- 2) Auto Execute
+-- ============================================================
+local ok2, err2 = pcall(function()
+    SettingsBox:AddCheckbox("AutoExecute", {
+        Text = "Auto Execute",
+        Default = loadAutoExecFlag(),
+        Callback = function(Value)
+            saveAutoExecFlag(Value)
+            if Value then
+                runAutoLoad()
+            end
+        end
+    })
+end)
+if not ok2 then
+    warn("[MinhoHub] Auto Execute 체크박스 추가 실패:", err2)
+end
+
+-- ============================================================
+-- SaveManager 연결
+-- ============================================================
+if Hub.SaveManager then
+    pcall(function()
+        Hub.SaveManager:SetLibrary(Hub.Library)
+        Hub.SaveManager:BuildConfigSection(Settings, "folder-cog")
+        Hub.SaveManager:LoadAutoloadConfig()
+    end)
+end
+
+-- ============================================================
+-- 시작 시 자동 실행
+-- ============================================================
 if loadAutoExecFlag() then
     task.defer(function()
         task.wait(1)
@@ -79,6 +103,9 @@ if loadAutoExecFlag() then
     end)
 end
 
+-- ============================================================
+-- 게임 나갈 때 정리
+-- ============================================================
 LocalPlayer.AncestryChanged:Connect(function()
     if not LocalPlayer:IsDescendantOf(game) then
         if Hub.stopNoclip then pcall(Hub.stopNoclip) end
