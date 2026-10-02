@@ -186,7 +186,6 @@ function CosmeticsWrap.DataHook.initialize()
     if current ~= nil then return hook.load(current) end
     return false
 end
-
 function CosmeticsWrap.DataHook.set(field, fn)
     CosmeticsWrap.DataHook.spoofs[field] = fn
     CosmeticsWrap.DataHook.initialize()
@@ -249,7 +248,6 @@ function CosmeticsWrap.DataHook.destroy()
 end
 
 CosmeticsWrap.ItemHook = { ALIAS = "GetWeaponData\0ohaio", restore = nil, _targetFn = nil }
-
 function CosmeticsWrap.ItemHook.target()
     if CosmeticsWrap.ItemHook._targetFn ~= nil then
         return CosmeticsWrap.ItemHook._targetFn
@@ -543,7 +541,6 @@ function CosmeticsWrap.Scene.reloadViewModel(item, itemName, selection)
     end)
     return true
 end
-
 function CosmeticsWrap.Scene.reloadAll(itemName, selection)
     local fighter = CosmeticsWrap.localFighter()
     if fighter == nil then return false end
@@ -669,7 +666,6 @@ end
 
 function CosmeticsWrap.Scene.installViewModelProvider()
     if CosmeticsWrap.Scene._providerInstalled then return true end
-
     local clientItem = CosmeticsWrap.clientItem()
     if clientItem == nil or type(clientItem._CreateViewModel) ~= "function" then
         return false
@@ -774,7 +770,6 @@ function CosmeticsWrap.Scene.installIconProvider()
         local ok, wrapped = pcall(newcclosure, wrappedIcon)
         if ok and wrapped then wrappedIcon = wrapped end
     end
-
     ilib.GetViewModelImageFromWeaponData = wrappedIcon
 end
 
@@ -816,7 +811,6 @@ function CosmeticsWrap.Rank.buildMetadata(rankName, leaderboardRank)
     end
     return { SeasonELO = rank.requiredELO, SeasonLeaderboardRank = leaderboardRank }
 end
-
 function CosmeticsWrap.RankCharm:SetForSeason(charmName, rankName, leaderboardRank)
     if rankName ~= nil and CosmeticsWrap.Rank.RANKS[rankName] == nil then
         local loader = rawget(CosmeticsWrap, "_loadRankProfile")
@@ -837,7 +831,6 @@ function CosmeticsWrap.RankCharm:GetForSeason(charmName)
     if entry == nil then return nil, nil end
     return entry.rankName, entry.leaderboardRank
 end
-
 function CosmeticsWrap.RankCharm:ResolveMetadata(charmName)
     if not CosmeticsWrap.Rank.isSeasonRankCharm(charmName) then return nil end
     local entry = self._overrides[charmName]
@@ -901,7 +894,8 @@ local function loadRankProfile()
         local charmName = "Season " .. tostring(version)
         local exists = false
         for _, existing in ipairs(CosmeticsWrap.Rank.SEASON_CHARM_NAMES) do
-            if existing == charmName then exists = true break end        end
+            if existing == charmName then exists = true break end
+        end
         if not exists then
             local info = byVersion[version]
             table.insert(CosmeticsWrap.Rank.SEASON_CHARMS, {
@@ -1043,9 +1037,6 @@ end
 
 local Cosmetics = Hub.Tabs.Cosmetics
 
--- ============================================================
--- Season Charm Override
--- ============================================================
 local SeasonCharmOverrideBox = Cosmetics:AddGroupbox({ Name = "Season Charm Override", Side = 2 })
 
 local SeasonCharmNames = { "None" }
@@ -1152,9 +1143,6 @@ task.spawn(function()
     end
 end)
 
--- ============================================================
--- State Holder (숨김)
--- ============================================================
 local CosmeticsStateHolder = Cosmetics:AddGroupbox({ Name = "StateData", Side = 2 })
 
 CosmeticsWrap._stateInput = CosmeticsStateHolder:AddInput("CosmeticsState", {
@@ -1182,50 +1170,14 @@ task.spawn(function()
     end
 end)
 
--- ============================================================
--- Cosmetics Group
--- ============================================================
 local Group = Cosmetics:AddGroupbox({ Name = "Rivals Cosmetics", Side = 1 })
 local NONE_LABEL = "None"
-
--- ============================================================
--- ★ Unlock All 토글
--- ============================================================
-CosmeticsWrap._unlockAll = false
-
-local UnlockAllGroup = Cosmetics:AddGroupbox({ Name = "Unlock All Cosmetics", Side = 2 })
-local UnlockAllToggle
-
--- forward declaration (cosmeticsOf가 이 변수 참조)
-local cosmeticsOf
-
-UnlockAllToggle = UnlockAllGroup:AddToggle("UnlockAllToggle", {
-    Text = "Unlock All (모든 스킨 표시)",
-    Default = false,
-    Callback = function(state)
-        CosmeticsWrap._unlockAll = state
-        if ClassDropdown and WeaponDropdown and KindDropdown and CosmeticDropdown then
-            local class = ClassDropdown.Value
-            local weapon = WeaponDropdown.Value
-            local kind = KindDropdown.Value
-            if weapon and kind then
-                local list = cosmeticsOf(class, weapon, kind)
-                CosmeticDropdown:SetValues(list)
-                CosmeticDropdown:SetValue(NONE_LABEL)
-                updateVisual(class, weapon, kind, NONE_LABEL)
-            end
-        end
-        print("[UnlockAll] " .. (state and "ON - 모든 스킨 표시" or "OFF"))
-    end,
-})
 
 local ClassDropdown, WeaponDropdown, KindDropdown, CosmeticDropdown
 local ViewerImage, InfoLabel
 local updateVisual
 local refreshDropdowns
 local syncCosmeticDropdown
-
--- ★ 저장 상태 로드
 task.spawn(function()
     local function tryLoad()
         local input = CosmeticsWrap._stateInput
@@ -1245,7 +1197,6 @@ task.spawn(function()
         if decoded.rankCharm ~= nil and type(decoded.rankCharm) == "table" then
             CosmeticsWrap.RankCharm._overrides = decoded.rankCharm
         end
-
         CosmeticsWrap.applyAll()
 
         if refreshDropdowns then
@@ -1397,48 +1348,19 @@ local function kindsOfWeapon(class, weapon)
     return out
 end
 
--- ★★★ Unlock All 지원 cosmeticsOf ★★★
-cosmeticsOf = function(class, weapon, kind)
+local function cosmeticsOf(class, weapon, kind)
     local names = { NONE_LABEL }
-    local seen = { [NONE_LABEL] = true }
-
-    if CosmeticsWrap._unlockAll then
-        local cosLib = CosmeticsWrap.cosmeticLibrary()
-        if cosLib and cosLib.Cosmetics then
-            for name, data in pairs(cosLib.Cosmetics) do
-                if type(data) == "table" and data.Type == kind and not seen[name] then
-                    seen[name] = true
-                    table.insert(names, name)
-                end
-            end
-        end
-    else
-        if byClass[class] and byClass[class][weapon] and byClass[class][weapon][kind] then
-            for _, entry in ipairs(byClass[class][weapon][kind]) do
-                if not seen[entry.name] then
-                    seen[entry.name] = true
-                    table.insert(names, entry.name)
-                end
-            end
-        end
-        if byClass["All"] and byClass["All"]["All"] and byClass["All"]["All"][kind] then
-            for _, entry in ipairs(byClass["All"]["All"][kind]) do
-                if not seen[entry.name] then
-                    seen[entry.name] = true
-                    table.insert(names, entry.name)
-                end
-            end
+    if byClass[class] and byClass[class][weapon] and byClass[class][weapon][kind] then
+        for _, entry in ipairs(byClass[class][weapon][kind]) do
+            table.insert(names, entry.name)
         end
     end
-
-    local rest = {}
-    for _, n in ipairs(names) do
-        if n ~= NONE_LABEL then table.insert(rest, n) end
+    if byClass["All"] and byClass["All"]["All"] and byClass["All"]["All"][kind] then
+        for _, entry in ipairs(byClass["All"]["All"][kind]) do
+            table.insert(names, entry.name)
+        end
     end
-    table.sort(rest)
-    local out = { NONE_LABEL }
-    for _, n in ipairs(rest) do table.insert(out, n) end
-    return out
+    return names
 end
 
 local function entryByName(class, weapon, kind, name)
@@ -1881,10 +1803,6 @@ refreshDropdowns = function()
     syncCosmeticDropdown()
 end
 
-local DEFAULT_WEAPON = weaponsOfClass(DEFAULT_CLASS)[1]
-local DEFAULT_KIND = "Skin"
-local DEFAULT_KINDS = kindsOfWeapon(DEFAULT_CLASS, DEFAULT_WEAPON)
-
 ClassDropdown = Group:AddDropdown("ClassSelect", {
     Text = "Weapon Type", Values = classNames, Default = DEFAULT_CLASS,
     Multi = false, Searchable = true,
@@ -1902,7 +1820,6 @@ ClassDropdown = Group:AddDropdown("ClassSelect", {
         end
     end,
 })
-
 WeaponDropdown = Group:AddDropdown("WeaponSelect", {
     Text = "Weapon",
     Values = weaponsOfClass(DEFAULT_CLASS),
@@ -1964,7 +1881,6 @@ task.spawn(function()
         end
     end
 end)
-
 Group:AddButton("Apply To All Weapons", function()
     local kind = KindDropdown.Value
     local name = CosmeticDropdown.Value
