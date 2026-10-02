@@ -18,7 +18,7 @@ local Config = {
     EvasionMode = "Random",
     NotifyEvents = true,
     HitAboveY = 0.5,
-    SpeedBoostMult = 0,   -- ★ 항상 0 고정 (슬라이더 제거)
+    SpeedBoostMult = 0,
     Weapons = {
         Priority = { "Primary", "Secondary", "Melee" },
         Enabled  = { Primary = true, Secondary = true, Melee = true, Utility = false },
@@ -34,6 +34,9 @@ local RageModule = {}
 Hub.RageModule = RageModule
 getgenv().__MinhoRageModule = RageModule
 
+-- ============================================================
+-- 상수 및 유틸
+-- ============================================================
 local FAR = 1073741824
 local DIRECTIONS = {
     Vector3.new( FAR, 0, 0), Vector3.new(-FAR, 0, 0),
@@ -42,6 +45,7 @@ local DIRECTIONS = {
 }
 local DIR_NAMES = { "E", "W", "S", "N", "Up", "Down" }
 local escapeIndex = 0
+
 local function cycleEscape()
     escapeIndex = (escapeIndex % #DIRECTIONS) + 1
     return DIRECTIONS[escapeIndex], DIR_NAMES[escapeIndex]
@@ -57,10 +61,12 @@ local function getRoot()
     local c = LocalPlayer.Character
     return c and c:FindFirstChild("HumanoidRootPart")
 end
+
 local function getHum()
     local c = LocalPlayer.Character
     return c and c:FindFirstChildOfClass("Humanoid")
 end
+
 local function getFighter()
     local ok, ctrl = pcall(function()
         return require(LocalPlayer.PlayerScripts.Controllers.FighterController)
@@ -205,6 +211,9 @@ local function weaponAction()
     return { type = "Attack", item = best.item }
 end
 
+-- ============================================================
+-- 무기 판별
+-- ============================================================
 local MELEE_KEYWORDS = { "knife", "katana", "sword", "dagger", "axe",
     "hammer", "bat", "scythe", "fist", "melee", "blade" }
 
@@ -217,6 +226,7 @@ local function getItemLib()
     if ok and lib and lib.Items then ItemCache = lib.Items end
     return ItemCache
 end
+
 local function getItemInfo(item)
     if not item then return nil end
     local name = rawget(item, "Name")
@@ -280,10 +290,16 @@ local function isInMatch()
     return not currency.Visible
 end
 
+-- ============================================================
+-- Remote / Util
+-- ============================================================
 local useItemRemote = ReplicatedStorage.Remotes.Replication.Fighter.UseItem
 local util  = require(ReplicatedStorage.Modules.Utility)
 local enums = require(ReplicatedStorage.Modules.EnumLibrary)
 
+-- ============================================================
+-- Silent Aim
+-- ============================================================
 local silentEnabled = true
 local silentFOV = 2000
 
@@ -320,9 +336,8 @@ end
 
 if not getgenv().__MinhoSilentAimHooked then
     getgenv().__MinhoSilentAimHooked = true
-    local oldFireServer
     if hookfunction and newcclosure then
-        oldFireServer = hookfunction(useItemRemote.FireServer, newcclosure(function(self, oid, action, cameradata, ...)
+        local oldFireServer = hookfunction(useItemRemote.FireServer, newcclosure(function(self, oid, action, cameradata, ...)
             if silentEnabled and action == enums:ToEnum("StartShooting") then
                 local target = getHeadTarget()
                 if target then
@@ -350,16 +365,22 @@ end
 
 _G.ToggleSilentHead = function(state) silentEnabled = state end
 
+-- ============================================================
+-- Desync
+-- ============================================================
 local Desync = { _cframe = nil, _oldCFrame = nil, _part = nil, _mode = "off" }
+
 local function desyncSetEnemy(cf) Desync._cframe = cf Desync._mode = "enemy" end
 local function desyncSetScatter(cf) Desync._cframe = cf Desync._mode = "scatter" end
 local function desyncClear() Desync._cframe = nil Desync._mode = "off" end
+
 local function desyncPush(root)
     if root == nil or Desync._cframe == nil then return end
     Desync._oldCFrame = root.CFrame
     Desync._part = root
     root.CFrame = Desync._cframe
 end
+
 local function desyncRestore()
     local old = Desync._oldCFrame
     if old == nil then return end
@@ -373,6 +394,9 @@ if not getgenv().__MinhoRageDesyncBound then
     RunService:BindToRenderStep("\0minho_rage_desync\0", Enum.RenderPriority.First.Value, desyncRestore)
 end
 
+-- ============================================================
+-- Speed Boost 원본
+-- ============================================================
 local speedBoostOriginal = getgenv().__MinhoRageSpeedBoost or nil
 getgenv().__MinhoRageSpeedBoost = speedBoostOriginal
 
@@ -380,17 +404,12 @@ getgenv().__MinhoRageSpeedBoost = speedBoostOriginal
 -- No Spread
 -- ============================================================
 local NoSpreadState = {
-    Hooked = false,
-    Method = nil,
-    Index = nil,
-    Original = nil,
-    Dummy = nil,
-    Bindings = nil,
+    Hooked = false, Method = nil, Index = nil,
+    Original = nil, Dummy = nil, Bindings = nil,
 }
 
 local function NoSpread_Load()
     if NoSpreadState.Hooked then return true end
-
     if not (setrawmetatable and clonefunction and debug.getupvalues and debug.setupvalue and getgc) then
         return false
     end
@@ -543,11 +562,9 @@ end
 
 local function NoSpread_Unload()
     if not NoSpreadState.Hooked then return end
-
     local inputMethod = NoSpreadState.Method
     local index = NoSpreadState.Index
     local original = NoSpreadState.Original
-
     if inputMethod and index and original then
         if type(index) == "table" then
             pcall(function() index.bundle[index.key] = original end)
@@ -555,7 +572,6 @@ local function NoSpread_Unload()
             pcall(function() debug.setupvalue(inputMethod, index, original) end)
         end
     end
-
     NoSpreadState.Hooked = false
     NoSpreadState.Method = nil
     NoSpreadState.Index = nil
@@ -577,7 +593,6 @@ getgenv().__MinhoNoRecoilOriginals = NoRecoilOriginals
 local function applyNoRecoil()
     local ok, lib = pcall(function() return require(ReplicatedStorage.Modules.ItemLibrary) end)
     if not ok or not lib or type(lib.Items) ~= "table" then return end
-
     for _, data in pairs(lib.Items) do
         if type(data) == "table" and type(data.ShootRecoil) == "number" then
             if NoRecoilOriginals[data] == nil then
@@ -586,7 +601,6 @@ local function applyNoRecoil()
             data.ShootRecoil = 0
         end
     end
-
     local fighter = getFighter()
     if fighter and type(fighter.Items) == "table" then
         for _, item in pairs(fighter.Items) do
@@ -633,6 +647,7 @@ local function safeToggle(id)
     local t = Toggles and Toggles[id]
     return t ~= nil and t.Value == true
 end
+
 local function safeOption(id, default)
     local o = Options and Options[id]
     if o == nil or o.Value == nil then return default end
@@ -759,7 +774,7 @@ end
 RageModule.applySpecialCooldowns = applySpecialCooldowns
 
 -- ============================================================
--- Speed Boost (항상 0 배율 적용)
+-- Speed Boost
 -- ============================================================
 local function applySpeedBoost()
     if speedBoostOriginal ~= nil then return end
@@ -772,7 +787,7 @@ local function applySpeedBoost()
         "Cooldown", "RecoveryTime", "ResetTime", "SwingTime", "SwingDelay",
         "ComboCooldown", "FireCooldown", "ReloadLength",
     }
-    local mult = Config.SpeedBoostMult  -- 항상 0
+    local mult = Config.SpeedBoostMult
     for name, data in pairs(lib.Items) do
         if type(data) == "table" then
             local orig = {}
@@ -790,6 +805,7 @@ local function applySpeedBoost()
     if next(speedBoostOriginal) == nil then speedBoostOriginal = nil end
     getgenv().__MinhoRageSpeedBoost = speedBoostOriginal
 end
+
 local function removeSpeedBoost()
     if speedBoostOriginal == nil then return end
     local ok, lib = pcall(function() return require(ReplicatedStorage.Modules.ItemLibrary) end)
@@ -804,9 +820,13 @@ local function removeSpeedBoost()
     speedBoostOriginal = nil
     getgenv().__MinhoRageSpeedBoost = nil
 end
+
 RageModule.applySpeedBoost = applySpeedBoost
 RageModule.removeSpeedBoost = removeSpeedBoost
 
+-- ============================================================
+-- Fire / Reload / Target
+-- ============================================================
 local function doFire(part)
     local fighter = getFighter()
     local item = fighter and fighter.EquippedItem
@@ -863,6 +883,9 @@ local function getClosestEnemy()
     return best
 end
 
+-- ============================================================
+-- Auto Pickup
+-- ============================================================
 RunService.Heartbeat:Connect(function()
     if not Config.AutoPickup.Enabled then return end
     if not firetouchinterest then return end
@@ -897,8 +920,14 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
+-- ============================================================
+-- Notify
+-- ============================================================
 local lastEscapeAt, lastAttachAt, lastMeleeAt = 0, 0, 0
 local lastTarget = nil
+local meleeCount = 0
+local meleeTarget = nil
+local switchState = { lastSwitchAt = 0, cooldown = 0.15 }
 
 local function notify(text, dur)
     if not Config.NotifyEvents then return end
@@ -909,15 +938,8 @@ local function notify(text, dur)
     end)
 end
 
-local meleeCount = 0
-local meleeTarget = nil
-local switchState = { lastSwitchAt = 0, cooldown = 0.15 }
-
 -- ============================================================
 -- Evasion
---   Random : 6방향 10억 studs scatter + 공격
---   Lobby  : 상대 머리로 desync → 공격 → 탄 0 or 장전 중이면 원래 자리로 귀환
---   Off    : 아무 것도 안 함
 -- ============================================================
 local function scatterStep(root, now)
     local dir, name = cycleEscape()
@@ -926,35 +948,31 @@ local function scatterStep(root, now)
     return name
 end
 
--- Lobby 상태
-local lobbyHomePos = nil    -- 로비 진입 시점의 원래 자리 (고정)
-local lobbyAway    = false  -- 현재 상대 머리 쪽에 있는지
+local lobbyHomePos = nil
 
 local function resetLobbyState()
     lobbyHomePos = nil
-    lobbyAway    = false
 end
 
--- 상대 머리로 desync (내 화면에선 그 자리, 서버에선 원래자리처럼 보일 수 있게)
 local function lobbyGotoAway(root, targetPos)
     if lobbyHomePos == nil then
         lobbyHomePos = root.CFrame
     end
     desyncSetEnemy(CFrame.new(targetPos + Vector3.new(0, Config.HitAboveY, 0)))
     desyncPush(root)
-    lobbyAway = true
 end
 
--- 원래 자리로 실제 복귀
 local function lobbyGotoHome(root)
     desyncClear()
     if lobbyHomePos then
         root.CFrame = lobbyHomePos
         root.AssemblyLinearVelocity = Vector3.zero
     end
-    lobbyAway = false
 end
 
+-- ============================================================
+-- UE Rage
+-- ============================================================
 local TELEPORT_CFRAME = CFrame.new(9000, 9000, 9000)
 local trackedParts = {}
 local ueEnabled = false
@@ -1012,11 +1030,11 @@ RunService.Heartbeat:Connect(function()
     end)
 end)
 
+-- ============================================================
+-- Underground
+-- ============================================================
 local undergroundState = getgenv().__MinhoUndergroundState or {
-    Active = false,
-    Conn = nil,
-    NoclipConn = nil,
-    GroundY = nil,
+    Active = false, Conn = nil, NoclipConn = nil, GroundY = nil,
 }
 getgenv().__MinhoUndergroundState = undergroundState
 
@@ -1075,17 +1093,14 @@ end
 local function startUnderground()
     if undergroundState.Active then return end
     undergroundState.Active = true
-
     undergroundState.Conn = RunService.Heartbeat:Connect(function(dt)
         if not undergroundState.Active then return end
         local root = getUndergroundRoot()
         local hum = getUndergroundHumanoid()
         if not root or not hum then return end
-
         if not undergroundState.GroundY then
             undergroundState.GroundY = root.Position.Y - UNDERGROUND_DEPTH
         end
-
         local moveDir = hum.MoveDirection
         if moveDir.Magnitude > 0.1 then
             local flat = Vector3.new(moveDir.X, 0, moveDir.Z).Unit
@@ -1093,12 +1108,10 @@ local function startUnderground()
         else
             root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
         end
-
         local currentPos = root.Position
         root.CFrame = CFrame.new(currentPos.X, undergroundState.GroundY, currentPos.Z) * (root.CFrame - root.CFrame.Position)
         root.AssemblyAngularVelocity = Vector3.zero
     end)
-
     enableUndergroundNoclip()
 end
 
@@ -1113,6 +1126,9 @@ LocalPlayer.CharacterAdded:Connect(function()
     end
 end)
 
+-- ============================================================
+-- Main Heartbeat
+-- ============================================================
 if RageModule._heartbeatConn then
     pcall(function() RageModule._heartbeatConn:Disconnect() end)
 end
@@ -1120,7 +1136,6 @@ end
 local lastEvasionMode = nil
 
 RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
-    -- Ragebot 꺼짐 → 모든 desync 정리
     if not Config.Enabled then
         if speedBoostOriginal then removeSpeedBoost() end
         desyncClear()
@@ -1139,14 +1154,12 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
     local root = getRoot()
     local hum  = getHum()
 
-    -- 캐릭터 없음/죽음 → 정리
     if not root or not hum or hum.Health <= 0 then
         desyncClear()
         resetLobbyState()
         return
     end
 
-    -- 매치 밖 → 정리
     if not isInMatch() then
         desyncClear()
         resetLobbyState()
@@ -1154,7 +1167,6 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
         return
     end
 
-    -- 모드 바뀌면 로비 상태 초기화
     if lastEvasionMode ~= Config.EvasionMode then
         lastEvasionMode = Config.EvasionMode
         resetLobbyState()
@@ -1162,9 +1174,7 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
 
     local evasionOn     = (Config.EvasionMode == "Random")
     local lobbyEvasioOn = (Config.EvasionMode == "Lobby")
-    -- Off: 아무 것도 안 함 (desync도 X)
 
-    -- Off 모드: 그냥 아무 동작 없이 return (단, 무기 관련 로직도 스킵)
     if not evasionOn and not lobbyEvasioOn then
         desyncClear()
         return
@@ -1180,13 +1190,12 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
     local currentIsMelee = isMelee(currentItem)
     local canSwitch      = (now - switchState.lastSwitchAt) > switchState.cooldown
 
-    -- ============================================================
-    -- Lobby 모드: 별도 로직
-    -- ============================================================
+    -- ========================================================
+    -- Lobby
+    -- ========================================================
     if lobbyEvasioOn then
         local enemy = getClosestEnemy()
         if not enemy then
-            -- 대상 없음 → 원래 자리 유지
             lobbyGotoHome(root)
             lastTarget  = nil
             meleeTarget = nil
@@ -1208,9 +1217,7 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
             notify("Target found: " .. (plr and plr.Name or "?"), 1.5)
         end
 
-        -- 근접이든 원거리든, 현재 무기의 탄약 확인
         if currentIsMelee then
-            -- 근접: 탄 개념 없음 → 그냥 상대 머리로 desync + 공격
             if targetChar ~= meleeTarget then
                 meleeCount  = 0
                 meleeTarget = targetChar
@@ -1223,7 +1230,6 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
                 meleeTarget = nil
                 return
             end
-
             lobbyGotoAway(root, head.Position)
             if doFire(head) then
                 meleeCount += 1
@@ -1234,24 +1240,18 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
             end
             return
         else
-            -- 원거리: 탄약 체크
             local ammo      = getAmmo(currentItem)
             local reloading = isReloading(currentItem)
 
             if reloading then
-                -- 장전 중 → 원래 자리에서 대기
                 lobbyGotoHome(root)
                 return
             end
-
             if ammo ~= nil and ammo <= 0 then
-                -- 탄 0 → 원래 자리로 복귀 + 장전 시작
                 lobbyGotoHome(root)
                 doReload(currentItem)
                 return
             end
-
-            -- 탄 있음 → 상대 머리로 desync + 공격
             lobbyGotoAway(root, head.Position)
             if doFire(head) then
                 if now - lastAttachAt > 1 then
@@ -1263,9 +1263,9 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
         end
     end
 
-    -- ============================================================
-    -- Random 모드 (기존 로직)
-    -- ============================================================
+    -- ========================================================
+    -- Random
+    -- ========================================================
     local action = weaponAction()
     if action == nil then
         scatterStep(root, now)
@@ -1335,10 +1335,8 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
             meleeCount  = 0
             meleeTarget = targetChar
         end
-
         local targetHum   = targetChar:FindFirstChildOfClass("Humanoid")
         local targetAlive = targetHum and targetHum.Health > 0 and not isDead(targetChar)
-
         if not targetAlive then
             local name = scatterStep(root, now)
             if now - lastEscapeAt > 0.5 then
@@ -1349,11 +1347,9 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
             meleeTarget = nil
             return
         end
-
         local targetPos = head.Position + Vector3.new(0, Config.HitAboveY, 0)
         desyncSetEnemy(CFrame.new(targetPos))
         desyncPush(root)
-
         if doFire(head) then
             meleeCount += 1
             if now - lastMeleeAt > 0.3 then
@@ -1367,7 +1363,6 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
     local targetPos = head.Position + Vector3.new(0, Config.HitAboveY, 0)
     desyncSetEnemy(CFrame.new(targetPos))
     desyncPush(root)
-
     if doFire(head) then
         if now - lastAttachAt > 1 then
             lastAttachAt = now
