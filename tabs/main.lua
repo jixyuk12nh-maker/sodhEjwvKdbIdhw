@@ -18,7 +18,7 @@ local Config = {
     EvasionMode = "Random",
     NotifyEvents = true,
     HitAboveY = 0.5,
-    SpeedBoostMult = 0,
+    SpeedBoostMult = 0,   -- ★ 항상 0 고정 (슬라이더 제거)
     Weapons = {
         Priority = { "Primary", "Secondary", "Melee" },
         Enabled  = { Primary = true, Secondary = true, Melee = true, Utility = false },
@@ -34,9 +34,6 @@ local RageModule = {}
 Hub.RageModule = RageModule
 getgenv().__MinhoRageModule = RageModule
 
--- ============================================================
--- 상수 및 유틸
--- ============================================================
 local FAR = 1073741824
 local DIRECTIONS = {
     Vector3.new( FAR, 0, 0), Vector3.new(-FAR, 0, 0),
@@ -45,7 +42,6 @@ local DIRECTIONS = {
 }
 local DIR_NAMES = { "E", "W", "S", "N", "Up", "Down" }
 local escapeIndex = 0
-
 local function cycleEscape()
     escapeIndex = (escapeIndex % #DIRECTIONS) + 1
     return DIRECTIONS[escapeIndex], DIR_NAMES[escapeIndex]
@@ -61,12 +57,10 @@ local function getRoot()
     local c = LocalPlayer.Character
     return c and c:FindFirstChild("HumanoidRootPart")
 end
-
 local function getHum()
     local c = LocalPlayer.Character
     return c and c:FindFirstChildOfClass("Humanoid")
 end
-
 local function getFighter()
     local ok, ctrl = pcall(function()
         return require(LocalPlayer.PlayerScripts.Controllers.FighterController)
@@ -120,13 +114,6 @@ local function isReloading(item)
     local ok, v = pcall(function() return item:IsReloading() end)
     if ok and v ~= nil then return v == true end
     return false
-end
-
-local function getAmmo(item)
-    if not item then return nil end
-    local data = itemField(item, "Data")
-    if not data then return nil end
-    return itemField(data, "Ammo")
 end
 
 local function equipItem(item)
@@ -211,9 +198,6 @@ local function weaponAction()
     return { type = "Attack", item = best.item }
 end
 
--- ============================================================
--- 무기 판별
--- ============================================================
 local MELEE_KEYWORDS = { "knife", "katana", "sword", "dagger", "axe",
     "hammer", "bat", "scythe", "fist", "melee", "blade" }
 
@@ -226,7 +210,6 @@ local function getItemLib()
     if ok and lib and lib.Items then ItemCache = lib.Items end
     return ItemCache
 end
-
 local function getItemInfo(item)
     if not item then return nil end
     local name = rawget(item, "Name")
@@ -290,26 +273,20 @@ local function isInMatch()
     return not currency.Visible
 end
 
--- ============================================================
--- Remote / Util
--- ============================================================
 local useItemRemote = ReplicatedStorage.Remotes.Replication.Fighter.UseItem
 local util  = require(ReplicatedStorage.Modules.Utility)
 local enums = require(ReplicatedStorage.Modules.EnumLibrary)
 
--- ============================================================
--- Silent Aim
--- ============================================================
 local silentEnabled = true
 local silentFOV = 2000
 
 local function getHeadTarget()
     local mousePos = UserInputService:GetMouseLocation()
     local closest, closestDist = nil, silentFOV
-    local myTeam = LocalPlayer:GetAttribute("TeamID")
-    local myEnv  = LocalPlayer:GetAttribute("EnvironmentID")
     for _, plr in ipairs(Players:GetPlayers()) do
         if plr ~= LocalPlayer and plr.Character then
+            local myTeam = LocalPlayer:GetAttribute("TeamID")
+            local myEnv  = LocalPlayer:GetAttribute("EnvironmentID")
             local env    = plr:GetAttribute("EnvironmentID")
             local team   = plr:GetAttribute("TeamID")
             local envOk  = (myEnv == nil) or (env == myEnv)
@@ -336,8 +313,9 @@ end
 
 if not getgenv().__MinhoSilentAimHooked then
     getgenv().__MinhoSilentAimHooked = true
+    local oldFireServer
     if hookfunction and newcclosure then
-        local oldFireServer = hookfunction(useItemRemote.FireServer, newcclosure(function(self, oid, action, cameradata, ...)
+        oldFireServer = hookfunction(useItemRemote.FireServer, newcclosure(function(self, oid, action, cameradata, ...)
             if silentEnabled and action == enums:ToEnum("StartShooting") then
                 local target = getHeadTarget()
                 if target then
@@ -365,22 +343,16 @@ end
 
 _G.ToggleSilentHead = function(state) silentEnabled = state end
 
--- ============================================================
--- Desync
--- ============================================================
 local Desync = { _cframe = nil, _oldCFrame = nil, _part = nil, _mode = "off" }
-
 local function desyncSetEnemy(cf) Desync._cframe = cf Desync._mode = "enemy" end
 local function desyncSetScatter(cf) Desync._cframe = cf Desync._mode = "scatter" end
 local function desyncClear() Desync._cframe = nil Desync._mode = "off" end
-
 local function desyncPush(root)
     if root == nil or Desync._cframe == nil then return end
     Desync._oldCFrame = root.CFrame
     Desync._part = root
     root.CFrame = Desync._cframe
 end
-
 local function desyncRestore()
     local old = Desync._oldCFrame
     if old == nil then return end
@@ -394,9 +366,6 @@ if not getgenv().__MinhoRageDesyncBound then
     RunService:BindToRenderStep("\0minho_rage_desync\0", Enum.RenderPriority.First.Value, desyncRestore)
 end
 
--- ============================================================
--- Speed Boost 원본
--- ============================================================
 local speedBoostOriginal = getgenv().__MinhoRageSpeedBoost or nil
 getgenv().__MinhoRageSpeedBoost = speedBoostOriginal
 
@@ -404,12 +373,17 @@ getgenv().__MinhoRageSpeedBoost = speedBoostOriginal
 -- No Spread
 -- ============================================================
 local NoSpreadState = {
-    Hooked = false, Method = nil, Index = nil,
-    Original = nil, Dummy = nil, Bindings = nil,
+    Hooked = false,
+    Method = nil,
+    Index = nil,
+    Original = nil,
+    Dummy = nil,
+    Bindings = nil,
 }
 
 local function NoSpread_Load()
     if NoSpreadState.Hooked then return true end
+
     if not (setrawmetatable and clonefunction and debug.getupvalues and debug.setupvalue and getgc) then
         return false
     end
@@ -562,9 +536,11 @@ end
 
 local function NoSpread_Unload()
     if not NoSpreadState.Hooked then return end
+
     local inputMethod = NoSpreadState.Method
     local index = NoSpreadState.Index
     local original = NoSpreadState.Original
+
     if inputMethod and index and original then
         if type(index) == "table" then
             pcall(function() index.bundle[index.key] = original end)
@@ -572,6 +548,7 @@ local function NoSpread_Unload()
             pcall(function() debug.setupvalue(inputMethod, index, original) end)
         end
     end
+
     NoSpreadState.Hooked = false
     NoSpreadState.Method = nil
     NoSpreadState.Index = nil
@@ -593,6 +570,7 @@ getgenv().__MinhoNoRecoilOriginals = NoRecoilOriginals
 local function applyNoRecoil()
     local ok, lib = pcall(function() return require(ReplicatedStorage.Modules.ItemLibrary) end)
     if not ok or not lib or type(lib.Items) ~= "table" then return end
+
     for _, data in pairs(lib.Items) do
         if type(data) == "table" and type(data.ShootRecoil) == "number" then
             if NoRecoilOriginals[data] == nil then
@@ -601,6 +579,7 @@ local function applyNoRecoil()
             data.ShootRecoil = 0
         end
     end
+
     local fighter = getFighter()
     if fighter and type(fighter.Items) == "table" then
         for _, item in pairs(fighter.Items) do
@@ -627,7 +606,6 @@ end
 
 RageModule.applyNoRecoil = applyNoRecoil
 RageModule.revertNoRecoil = revertNoRecoil
-
 -- ============================================================
 -- Special Skill Cooldowns
 -- ============================================================
@@ -647,7 +625,6 @@ local function safeToggle(id)
     local t = Toggles and Toggles[id]
     return t ~= nil and t.Value == true
 end
-
 local function safeOption(id, default)
     local o = Options and Options[id]
     if o == nil or o.Value == nil then return default end
@@ -670,7 +647,6 @@ local function applySpecialCooldowns()
     local gunVal    = safeOption("FireCooldownSlider", SPECIAL_BASE)
     local meleeOn   = safeToggle("MeleeCooldownEnabled")
     local meleeVal  = safeOption("MeleeCooldownSlider", SPECIAL_BASE)
-
     local GUN_MIN = 0.02
     local MELEE_MIN = 0.02
 
@@ -774,7 +750,7 @@ end
 RageModule.applySpecialCooldowns = applySpecialCooldowns
 
 -- ============================================================
--- Speed Boost
+-- Speed Boost (항상 0 배율 적용)
 -- ============================================================
 local function applySpeedBoost()
     if speedBoostOriginal ~= nil then return end
@@ -787,7 +763,7 @@ local function applySpeedBoost()
         "Cooldown", "RecoveryTime", "ResetTime", "SwingTime", "SwingDelay",
         "ComboCooldown", "FireCooldown", "ReloadLength",
     }
-    local mult = Config.SpeedBoostMult
+    local mult = Config.SpeedBoostMult  -- 항상 0
     for name, data in pairs(lib.Items) do
         if type(data) == "table" then
             local orig = {}
@@ -805,7 +781,6 @@ local function applySpeedBoost()
     if next(speedBoostOriginal) == nil then speedBoostOriginal = nil end
     getgenv().__MinhoRageSpeedBoost = speedBoostOriginal
 end
-
 local function removeSpeedBoost()
     if speedBoostOriginal == nil then return end
     local ok, lib = pcall(function() return require(ReplicatedStorage.Modules.ItemLibrary) end)
@@ -820,13 +795,9 @@ local function removeSpeedBoost()
     speedBoostOriginal = nil
     getgenv().__MinhoRageSpeedBoost = nil
 end
-
 RageModule.applySpeedBoost = applySpeedBoost
 RageModule.removeSpeedBoost = removeSpeedBoost
 
--- ============================================================
--- Fire / Reload / Target
--- ============================================================
 local function doFire(part)
     local fighter = getFighter()
     local item = fighter and fighter.EquippedItem
@@ -883,9 +854,6 @@ local function getClosestEnemy()
     return best
 end
 
--- ============================================================
--- Auto Pickup
--- ============================================================
 RunService.Heartbeat:Connect(function()
     if not Config.AutoPickup.Enabled then return end
     if not firetouchinterest then return end
@@ -920,14 +888,8 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- ============================================================
--- Notify
--- ============================================================
 local lastEscapeAt, lastAttachAt, lastMeleeAt = 0, 0, 0
 local lastTarget = nil
-local meleeCount = 0
-local meleeTarget = nil
-local switchState = { lastSwitchAt = 0, cooldown = 0.15 }
 
 local function notify(text, dur)
     if not Config.NotifyEvents then return end
@@ -938,9 +900,10 @@ local function notify(text, dur)
     end)
 end
 
--- ============================================================
--- Evasion
--- ============================================================
+local meleeCount = 0
+local meleeTarget = nil
+local switchState = { lastSwitchAt = 0, cooldown = 0.15 }
+
 local function scatterStep(root, now)
     local dir, name = cycleEscape()
     desyncSetScatter(CFrame.new(root.CFrame.Position + dir))
@@ -948,31 +911,6 @@ local function scatterStep(root, now)
     return name
 end
 
-local lobbyHomePos = nil
-
-local function resetLobbyState()
-    lobbyHomePos = nil
-end
-
-local function lobbyGotoAway(root, targetPos)
-    if lobbyHomePos == nil then
-        lobbyHomePos = root.CFrame
-    end
-    desyncSetEnemy(CFrame.new(targetPos + Vector3.new(0, Config.HitAboveY, 0)))
-    desyncPush(root)
-end
-
-local function lobbyGotoHome(root)
-    desyncClear()
-    if lobbyHomePos then
-        root.CFrame = lobbyHomePos
-        root.AssemblyLinearVelocity = Vector3.zero
-    end
-end
-
--- ============================================================
--- UE Rage
--- ============================================================
 local TELEPORT_CFRAME = CFrame.new(9000, 9000, 9000)
 local trackedParts = {}
 local ueEnabled = false
@@ -1030,11 +968,11 @@ RunService.Heartbeat:Connect(function()
     end)
 end)
 
--- ============================================================
--- Underground
--- ============================================================
 local undergroundState = getgenv().__MinhoUndergroundState or {
-    Active = false, Conn = nil, NoclipConn = nil, GroundY = nil,
+    Active = false,
+    Conn = nil,
+    NoclipConn = nil,
+    GroundY = nil,
 }
 getgenv().__MinhoUndergroundState = undergroundState
 
@@ -1093,14 +1031,17 @@ end
 local function startUnderground()
     if undergroundState.Active then return end
     undergroundState.Active = true
+
     undergroundState.Conn = RunService.Heartbeat:Connect(function(dt)
         if not undergroundState.Active then return end
         local root = getUndergroundRoot()
         local hum = getUndergroundHumanoid()
         if not root or not hum then return end
+
         if not undergroundState.GroundY then
             undergroundState.GroundY = root.Position.Y - UNDERGROUND_DEPTH
         end
+
         local moveDir = hum.MoveDirection
         if moveDir.Magnitude > 0.1 then
             local flat = Vector3.new(moveDir.X, 0, moveDir.Z).Unit
@@ -1108,10 +1049,12 @@ local function startUnderground()
         else
             root.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
         end
+
         local currentPos = root.Position
         root.CFrame = CFrame.new(currentPos.X, undergroundState.GroundY, currentPos.Z) * (root.CFrame - root.CFrame.Position)
         root.AssemblyAngularVelocity = Vector3.zero
     end)
+
     enableUndergroundNoclip()
 end
 
@@ -1126,160 +1069,65 @@ LocalPlayer.CharacterAdded:Connect(function()
     end
 end)
 
--- ============================================================
--- Main Heartbeat
--- ============================================================
 if RageModule._heartbeatConn then
     pcall(function() RageModule._heartbeatConn:Disconnect() end)
 end
-
-local lastEvasionMode = nil
 
 RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
     if not Config.Enabled then
         if speedBoostOriginal then removeSpeedBoost() end
         desyncClear()
-        resetLobbyState()
-        lastEvasionMode = nil
         return
     end
 
     if speedBoostOriginal == nil then applySpeedBoost() end
+
     pcall(applySpecialCooldowns)
+
     if safeToggle("NoRecoilEnabled") then
         pcall(applyNoRecoil)
     end
-
-    local now  = os.clock()
+    local now = os.clock()
     local root = getRoot()
-    local hum  = getHum()
-
-    if not root or not hum or hum.Health <= 0 then
-        desyncClear()
-        resetLobbyState()
-        return
-    end
-
+    local hum = getHum()
+    if not root or not hum or hum.Health <= 0 then desyncClear() return end
     if not isInMatch() then
         desyncClear()
-        resetLobbyState()
         lastTarget = nil
         return
     end
 
-    if lastEvasionMode ~= Config.EvasionMode then
-        lastEvasionMode = Config.EvasionMode
-        resetLobbyState()
-    end
-
-    local evasionOn     = (Config.EvasionMode == "Random")
-    local lobbyEvasioOn = (Config.EvasionMode == "Lobby")
-
-    if not evasionOn and not lobbyEvasioOn then
-        desyncClear()
-        return
-    end
+    local evasionOn = (Config.EvasionMode == "Random")
 
     local currentItem = getEquippedItem()
-    if not currentItem then
-        desyncClear()
-        resetLobbyState()
-        return
-    end
+    if not currentItem then desyncClear() return end
 
+    local currentClass = itemClass(currentItem)
     local currentIsMelee = isMelee(currentItem)
-    local canSwitch      = (now - switchState.lastSwitchAt) > switchState.cooldown
+    local canSwitch = (now - switchState.lastSwitchAt) > switchState.cooldown
 
-    -- ========================================================
-    -- Lobby
-    -- ========================================================
-    if lobbyEvasioOn then
-        local enemy = getClosestEnemy()
-        if not enemy then
-            lobbyGotoHome(root)
-            lastTarget  = nil
-            meleeTarget = nil
-            return
-        end
-
-        local targetChar = enemy.Character
-        local head       = enemy.Head
-        if not targetChar or not head or isDead(targetChar) then
-            lobbyGotoHome(root)
-            lastTarget  = nil
-            meleeTarget = nil
-            return
-        end
-
-        if targetChar ~= lastTarget then
-            lastTarget = targetChar
-            local plr = Players:GetPlayerFromCharacter(targetChar)
-            notify("Target found: " .. (plr and plr.Name or "?"), 1.5)
-        end
-
-        if currentIsMelee then
-            if targetChar ~= meleeTarget then
-                meleeCount  = 0
-                meleeTarget = targetChar
-            end
-            local targetHum   = targetChar:FindFirstChildOfClass("Humanoid")
-            local targetAlive = targetHum and targetHum.Health > 0 and not isDead(targetChar)
-            if not targetAlive then
-                lobbyGotoHome(root)
-                meleeCount  = 0
-                meleeTarget = nil
-                return
-            end
-            lobbyGotoAway(root, head.Position)
-            if doFire(head) then
-                meleeCount += 1
-                if now - lastMeleeAt > 0.3 then
-                    lastMeleeAt = now
-                    notify(string.format("Melee attacking (%d hits)", meleeCount), 1)
-                end
-            end
-            return
-        else
-            local ammo      = getAmmo(currentItem)
-            local reloading = isReloading(currentItem)
-
-            if reloading then
-                lobbyGotoHome(root)
-                return
-            end
-            if ammo ~= nil and ammo <= 0 then
-                lobbyGotoHome(root)
-                doReload(currentItem)
-                return
-            end
-            lobbyGotoAway(root, head.Position)
-            if doFire(head) then
-                if now - lastAttachAt > 1 then
-                    lastAttachAt = now
-                    notify("Attach -> fire", 1)
-                end
-            end
-            return
-        end
-    end
-
-    -- ========================================================
-    -- Random
-    -- ========================================================
     local action = weaponAction()
     if action == nil then
-        scatterStep(root, now)
+        if evasionOn then
+            scatterStep(root, now)
+        else
+            desyncClear()
+        end
         return
     end
 
     if action.type == "Swap" then
-        scatterStep(root, now)
+        if evasionOn then
+            scatterStep(root, now)
+        else
+            desyncClear()
+        end
         if canSwitch then
             local success = equipItem(action.item)
             switchState.lastSwitchAt = now
             if success then
                 local newClass = itemClass(action.item)
-                local newName  = rawget(action.item, "Name") or "?"
+                local newName = rawget(action.item, "Name") or "?"
                 notify("Weapon switched -> " .. newName .. " (" .. (newClass or "?") .. ")", 1.0)
             end
         end
@@ -1288,20 +1136,28 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
 
     if action.type == "Reload" then
         if not isReloading(action.item) then doReload(action.item) end
-        local name = scatterStep(root, now)
-        if now - lastEscapeAt > 1 then
-            lastEscapeAt = now
-            notify("Out of ammo -> reload + escape " .. name, 1.5)
+        if evasionOn then
+            local name = scatterStep(root, now)
+            if now - lastEscapeAt > 1 then
+                lastEscapeAt = now
+                notify("Out of ammo -> reload + escape " .. name, 1.5)
+            end
+        else
+            desyncClear()
         end
         return
     end
 
     if action.type == "Utility" then
-        local name = scatterStep(root, now)
-        if now - lastEscapeAt > 2 then
-            lastEscapeAt = now
-            local utilName = rawget(action.item, "Name") or "?"
-            notify("Utility (" .. utilName .. ") -> escape " .. name, 2)
+        if evasionOn then
+            local name = scatterStep(root, now)
+            if now - lastEscapeAt > 2 then
+                lastEscapeAt = now
+                local utilName = rawget(action.item, "Name") or "?"
+                notify("Utility (" .. utilName .. ") -> escape " .. name, 2)
+            end
+        else
+            desyncClear()
         end
         lastTarget = nil
         return
@@ -1309,17 +1165,24 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
 
     local enemy = getClosestEnemy()
     if not enemy then
-        scatterStep(root, now)
-        lastTarget  = nil
+        if evasionOn then
+            scatterStep(root, now)
+        else
+            desyncClear()
+        end
+        lastTarget = nil
         meleeTarget = nil
         return
     end
-
     local targetChar = enemy.Character
-    local head       = enemy.Head
+    local head = enemy.Head
     if not targetChar or not head or isDead(targetChar) then
-        scatterStep(root, now)
-        lastTarget  = nil
+        if evasionOn then
+            scatterStep(root, now)
+        else
+            desyncClear()
+        end
+        lastTarget = nil
         meleeTarget = nil
         return
     end
@@ -1332,21 +1195,28 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
 
     if currentIsMelee then
         if targetChar ~= meleeTarget then
-            meleeCount  = 0
+            meleeCount = 0
             meleeTarget = targetChar
         end
-        local targetHum   = targetChar:FindFirstChildOfClass("Humanoid")
+
+        local targetHum = targetChar:FindFirstChildOfClass("Humanoid")
         local targetAlive = targetHum and targetHum.Health > 0 and not isDead(targetChar)
+
         if not targetAlive then
-            local name = scatterStep(root, now)
-            if now - lastEscapeAt > 0.5 then
-                lastEscapeAt = now
-                notify("Melee kill -> escape " .. name, 2)
+            if evasionOn then
+                local name = scatterStep(root, now)
+                if now - lastEscapeAt > 0.5 then
+                    lastEscapeAt = now
+                    notify("Melee kill -> escape " .. name, 2)
+                end
+            else
+                desyncClear()
             end
-            meleeCount  = 0
+            meleeCount = 0
             meleeTarget = nil
             return
         end
+
         local targetPos = head.Position + Vector3.new(0, Config.HitAboveY, 0)
         desyncSetEnemy(CFrame.new(targetPos))
         desyncPush(root)
@@ -1374,11 +1244,12 @@ end)
 -- ============================================================
 -- UI
 -- ============================================================
-local RageBox = Main:AddGroupbox({ Name = "Ragebot", Side = 1 })
-local WCBox   = Main:AddGroupbox({ Name = "Weapon Config", Side = 1 })
-local RBox    = Main:AddGroupbox({ Name = "Rage", Side = 2 })
-local SCBox   = Main:AddGroupbox({ Name = "Speed Control", Side = 2 })
+local RageBox   = Main:AddGroupbox({ Name = "Ragebot", Side = 1 })
+local WCBox     = Main:AddGroupbox({ Name = "Weapon Config", Side = 1 })  -- Priority 숨김용으로만 유지
+local RBox      = Main:AddGroupbox({ Name = "Rage", Side = 2 })
+local SCBox     = Main:AddGroupbox({ Name = "Speed Control", Side = 2 })
 
+-- ===== Ragebot 박스 (순서: Enabled → Evasion → Notify → HitAboveY → OnEmptyAmmo → Weapon Types) =====
 RageBox:AddCheckbox("RageEnabled", {
     Text = "Ragebot Enabled", Default = false,
     Callback = function(v) Config.Enabled = v end,
@@ -1420,6 +1291,7 @@ RageBox:AddCheckbox("Enabled_Utility", {
     Text = "Use Utility", Default = false,
     Callback = function(v) Config.Weapons.Enabled.Utility = v end })
 
+-- ===== Priority 드롭다운: 기능 유지, UI에서만 숨김 =====
 local ALL_CLASSES = { "Primary", "Secondary", "Melee" }
 local function makeRankDropdown(label, default, key)
     return WCBox:AddDropdown("Rank_" .. key, {
@@ -1460,17 +1332,28 @@ hideUIObject(rank1)
 hideUIObject(rank2)
 hideUIObject(rank3)
 
+-- ===== Rage 박스 =====
 RBox:AddCheckbox("UEAssistedRage", {
     Text = "UE Assisted Rage", Default = false,
-    Callback = function(Value) setUERage(Value) end,
+    Callback = function(Value)
+        setUERage(Value)
+    end,
 })
 
 RBox:AddCheckbox("Underground", {
     Text = "Underground", Default = false,
     Callback = function(Value)
-        if Value then startUnderground() else stopUnderground() end
+        if Value then
+            startUnderground()
+        else
+            stopUnderground()
+        end
     end,
 })
+
+-- ============================================================
+-- Speed Control
+-- ============================================================
 
 SCBox:AddCheckbox("NoRecoilEnabled", {
     Text = "No Recoil",
