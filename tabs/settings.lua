@@ -5,107 +5,24 @@ if not Hub then return end
 local Settings = Hub.Tabs.Settings
 local LocalPlayer = Hub.LocalPlayer
 
-local AUTOEXEC_PATH = "MinhoHub/autoexec.json"
-
-local function ensureFolder()
-    if not (isfolder and makefolder) then return end
-    if not isfolder("MinhoHub") then
-        pcall(makefolder, "MinhoHub")
-    end
-end
-
-local function loadAutoExecFlag()
-    if not (isfile and readfile) then return false end
-    if not isfile(AUTOEXEC_PATH) then return false end
-    local ok, data = pcall(function()
-        return game:GetService("HttpService"):JSONDecode(readfile(AUTOEXEC_PATH))
-    end)
-    if ok and type(data) == "table" and data.enabled == true then
-        return true
-    end
-    return false
-end
-
-local function saveAutoExecFlag(enabled)
-    if not writefile then return end
-    ensureFolder()
-    pcall(function()
-        writefile(AUTOEXEC_PATH, game:GetService("HttpService"):JSONEncode({ enabled = enabled == true }))
-    end)
-end
-
-local function runAutoLoad()
-    if Hub.Modules and Hub.Modules["auto load"] then
-        local mod = Hub.Modules["auto load"]
-        if mod.Toggle then
-            pcall(function() mod:Toggle(true) end)
-        end
-    end
-end
-
 local SettingsBox = Settings:AddGroupbox({ Name = "Keybinds", Side = 1 })
 
--- ============================================================
--- 1) Show Keybinds Window
--- ============================================================
-local ok1, err1 = pcall(function()
-    SettingsBox:AddCheckbox("ShowKeybindsWindow", {
-        Text = "Show Keybinds Window",
-        Default = false,
-        Callback = function(Value)
-            if Hub.Library and Hub.Library.KeybindFrame then
-                Hub.Library.KeybindFrame.Visible = Value
-            end
+SettingsBox:AddCheckbox("ShowKeybindsWindow", {
+    Text = "Show Keybinds Window",
+    Default = false,
+    Callback = function(Value)
+        if Hub.Library.KeybindFrame then
+            Hub.Library.KeybindFrame.Visible = Value
         end
-    })
-end)
-if not ok1 then
-    warn("[MinhoHub] Show Keybinds Window 체크박스 추가 실패:", err1)
-end
+    end
+})
 
--- ============================================================
--- 2) Auto Execute
--- ============================================================
-local ok2, err2 = pcall(function()
-    SettingsBox:AddCheckbox("AutoExecute", {
-        Text = "Auto Execute",
-        Default = loadAutoExecFlag(),
-        Callback = function(Value)
-            saveAutoExecFlag(Value)
-            if Value then
-                runAutoLoad()
-            end
-        end
-    })
-end)
-if not ok2 then
-    warn("[MinhoHub] Auto Execute 체크박스 추가 실패:", err2)
-end
-
--- ============================================================
--- SaveManager 연결
--- ============================================================
 if Hub.SaveManager then
-    pcall(function()
-        Hub.SaveManager:SetLibrary(Hub.Library)
-        Hub.SaveManager:BuildConfigSection(Settings, "folder-cog")
-        Hub.SaveManager:LoadAutoloadConfig()
-    end)
+    Hub.SaveManager:SetLibrary(Hub.Library)
+    Hub.SaveManager:BuildConfigSection(Settings, "folder-cog")
+    Hub.SaveManager:LoadAutoloadConfig()
 end
 
--- ============================================================
--- 시작 시 자동 실행
--- ============================================================
-if loadAutoExecFlag() then
-    task.defer(function()
-        task.wait(1)
-        runAutoLoad()
-    end)
-end
-
--- ============================================================
--- 게임 나갈 때 정리
--- ============================================================
 LocalPlayer.AncestryChanged:Connect(function()
     if not LocalPlayer:IsDescendantOf(game) then
         if Hub.stopNoclip then pcall(Hub.stopNoclip) end
