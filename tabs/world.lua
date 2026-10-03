@@ -144,7 +144,7 @@ Skybox:AddCheckbox("SkyboxEnabled", {
 })
 
 Skybox:AddDropdown("SkyboxType", {
-    Text = "Skybox",
+    Text = "Skybox Type",
     Values = { "None", "FPS Skybox" },
     Default = skyboxState.Selected,
     Multi = false,
