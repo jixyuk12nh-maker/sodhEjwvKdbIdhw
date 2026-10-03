@@ -291,7 +291,6 @@ local silentClosestPart = false
 local silentShowFOV = false
 local silentHitChance = 100
 
--- FOV 원 그리기
 local fovCircle = nil
 local function createFOVCircle()
     if fovCircle then return fovCircle end
@@ -311,7 +310,6 @@ local function createFOVCircle()
     return fovCircle
 end
 
--- 가장 가까운 부위 찾기
 local function getClosestPart(character)
     if not character then return nil end
     local cam = ws.CurrentCamera
@@ -373,7 +371,6 @@ if not getgenv().__MinhoSilentAimHooked then
     if hookfunction and newcclosure then
         oldFireServer = hookfunction(useItemRemote.FireServer, newcclosure(function(self, oid, action, cameradata, ...)
             if silentEnabled and action == enums:ToEnum("StartShooting") then
-                -- Hit Chance 체크
                 if silentHitChance < 100 then
                     if math.random(1, 100) > silentHitChance then
                         return oldFireServer(self, oid, action, cameradata, ...)
@@ -437,9 +434,6 @@ end
 local speedBoostOriginal = getgenv().__MinhoRageSpeedBoost or nil
 getgenv().__MinhoRageSpeedBoost = speedBoostOriginal
 
--- ============================================================
--- No Spread
--- ============================================================
 local NoSpreadState = {
     Hooked = false,
     Method = nil,
@@ -629,9 +623,6 @@ end
 RageModule.NoSpread_Load = NoSpread_Load
 RageModule.NoSpread_Unload = NoSpread_Unload
 
--- ============================================================
--- No Recoil
--- ============================================================
 local NoRecoilOriginals = getgenv().__MinhoNoRecoilOriginals or {}
 getgenv().__MinhoNoRecoilOriginals = NoRecoilOriginals
 
@@ -675,9 +666,6 @@ end
 RageModule.applyNoRecoil = applyNoRecoil
 RageModule.revertNoRecoil = revertNoRecoil
 
--- ============================================================
--- Special Skill Cooldowns
--- ============================================================
 local SPECIAL_BASE = 75
 
 local SpecialCooldownOriginals = getgenv().__MinhoSpecialCooldownOriginals or {
@@ -819,9 +807,6 @@ end
 
 RageModule.applySpecialCooldowns = applySpecialCooldowns
 
--- ============================================================
--- Speed Boost (항상 0 배율 적용)
--- ============================================================
 local function applySpeedBoost()
     if speedBoostOriginal ~= nil then return end
     local ok, lib = pcall(function() return require(ReplicatedStorage.Modules.ItemLibrary) end)
@@ -844,7 +829,8 @@ local function applySpeedBoost()
                         data[f] = data[f] * mult
                     end
                 end
-            end            if next(orig) ~= nil then speedBoostOriginal[name] = orig end
+            end
+            if next(orig) ~= nil then speedBoostOriginal[name] = orig end
         end
     end
     if next(speedBoostOriginal) == nil then speedBoostOriginal = nil end
@@ -1311,9 +1297,6 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
     end
 end)
 
--- ============================================================
--- FOV Circle 렌더링
--- ============================================================
 RunService.RenderStepped:Connect(function()
     if not silentShowFOV then
         if fovCircle then fovCircle.Visible = false end
@@ -1330,19 +1313,13 @@ RunService.RenderStepped:Connect(function()
     c.Visible = true
 end)
 
--- ============================================================
--- UI
--- ============================================================
--- 왼쪽 (Side 1): Ragebot → Rage → Weapon Config
 local RageBox  = Main:AddGroupbox({ Name = "Ragebot", Side = 1 })
 local RBox     = Main:AddGroupbox({ Name = "Rage", Side = 1 })
 local WCBox    = Main:AddGroupbox({ Name = "Weapon Config", Side = 1 })
 
--- 오른쪽 (Side 2): Silent Aim → Speed Control
 local SABox    = Main:AddGroupbox({ Name = "Silent Aim", Side = 2 })
 local SCBox    = Main:AddGroupbox({ Name = "Speed Control", Side = 2 })
 
--- ===== Ragebot 박스 =====
 RageBox:AddCheckbox("RageEnabled", {
     Text = "Ragebot Enabled", Default = false,
     Callback = function(v) Config.Enabled = v end,
@@ -1384,7 +1361,6 @@ RageBox:AddCheckbox("Enabled_Utility", {
     Text = "Use Utility", Default = false,
     Callback = function(v) Config.Weapons.Enabled.Utility = v end })
 
--- ===== Rage 박스 =====
 RBox:AddCheckbox("UEAssistedRage", {
     Text = "UE Assisted Rage", Default = false,
     Callback = function(Value)
@@ -1402,7 +1378,6 @@ RBox:AddCheckbox("Underground", {
     end,
 })
 
--- ===== Weapon Config (Priority 숨김용) =====
 local ALL_CLASSES = { "Primary", "Secondary", "Melee" }
 local function makeRankDropdown(label, default, key)
     return WCBox:AddDropdown("Rank_" .. key, {
@@ -1443,7 +1418,6 @@ hideUIObject(rank1)
 hideUIObject(rank2)
 hideUIObject(rank3)
 
--- ===== Silent Aim 박스 =====
 SABox:AddCheckbox("SilentAim_Enabled", {
     Text = "Enabled", Default = true,
     Callback = function(v)
@@ -1497,7 +1471,6 @@ SABox:AddSlider("SilentAim_HitChance", {
     end,
 })
 
--- ===== Speed Control 박스 =====
 SCBox:AddCheckbox("NoRecoilEnabled", {
     Text = "No Recoil",
     Default = false,
