@@ -144,17 +144,18 @@ Skybox:AddCheckbox("SkyboxEnabled", {
 })
 
 Skybox:AddDropdown("SkyboxType", {
-    Text = "Skybox Type",
+    Text = "Skybox",
     Values = { "None", "FPS Skybox" },
     Default = skyboxState.Selected,
     Multi = false,
     Callback = function(Value)
+        skyboxState.Enabled = true
         setSkyboxSelection(Value)
     end
 })
 
-if skyboxState.Selected == "FPS Skybox" and skyboxState.Enabled then
-    applyFPSLighting()
+if skyboxState.Enabled and skyboxState.Selected and skyboxState.Selected ~= "None" then
+    setSkyboxSelection(skyboxState.Selected)
 else
     restoreSkybox()
 end
