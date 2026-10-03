@@ -26,8 +26,8 @@ local Config = {
     },
     SilentAim = {
         Enabled = true,
-        Manipulation = false,      -- 올헤드
-        ClosestPart = false,       -- 조준선 최근접
+        Manipulation = false,
+        ClosestPart = false,
         ShowFOV = false,
         Radius = 100,
         HitChance = 100,
@@ -266,11 +266,13 @@ local function getHead(character)
         or character:FindFirstChild("HitboxHead")
 end
 
--- 조준선(마우스)에 가장 가까운 파트 반환 (사일런트 전용)
+-- 사일런트용: 마우스(조준선)에 가장 가까운 부위, FOV 밖이면 nil
+local silentFOV = 100     -- ★ getClosestPart에서 참조하므로 미리 선언
+
 local function getClosestPart(character)
     if not character then return nil end
     local cam = ws.CurrentCamera
-    if not cam then return getHead(character) end
+    if not cam then return nil end
     local mousePos = UserInputService:GetMouseLocation()
     local parts = {}
     for _, name in ipairs({ "Head", "HitboxHead", "UpperTorso", "Torso", "LowerTorso", "HumanoidRootPart",
@@ -279,7 +281,7 @@ local function getClosestPart(character)
         local p = character:FindFirstChild(name)
         if p and p:IsA("BasePart") then parts[#parts + 1] = p end
     end
-    local closest, closestDist = nil, math.huge
+    local closest, closestDist = nil, silentFOV
     for _, p in ipairs(parts) do
         local pos, visible = cam:WorldToViewportPoint(p.Position)
         if visible and pos.Z > 0 then
@@ -290,7 +292,7 @@ local function getClosestPart(character)
             end
         end
     end
-    return closest or getHead(character)
+    return closest
 end
 
 -- ★ 레이지 전용: 무조건 헤드 (HitboxHead)
@@ -319,9 +321,8 @@ local util  = require(ReplicatedStorage.Modules.Utility)
 local enums = require(ReplicatedStorage.Modules.EnumLibrary)
 
 local silentEnabled = true
-local silentFOV = 100
-local silentManipulation = false     -- 올헤드
-local silentClosestPart = false      -- 조준선 최근접
+local silentManipulation = false
+local silentClosestPart = false
 local silentShowFOV = false
 local silentHitChance = 100
 
@@ -344,6 +345,7 @@ local function createFOVCircle()
     return fovCircle
 end
 
+-- ★ FOV 이내에서 가장 가까운 적 (Head 기준)
 local function getHeadTarget()
     local mousePos = UserInputService:GetMouseLocation()
     local closest, closestDist = nil, silentFOV
@@ -392,31 +394,65 @@ if not getgenv().__MinhoSilentAimHooked then
 
                 local target = getHeadTarget()
                 if target then
-                    local part
-                    if silentManipulation then
-                        -- ★ 올헤드: 무조건 HitboxHead
-                        part = target:FindFirstChild("HitboxHead")
-                            or target:FindFirstChild("Head")
-                    elseif silentClosestPart then
-                        -- ★ 조준선 최근접
-                        part = getClosestPart(target)
-                    else
-                        -- 기본: Head
-                        part = target:FindFirstChild("Head")
-                            or target:FindFirstChild("HitboxHead")
+                    -- ★ 1차 FOV 검증: 대상의 어느 파트든 FOV 안이어야 함
+                    local inFOV = false
+                    local cam = ws.CurrentCamera
+                    if cam then
+                        local mousePos = UserInputService:GetMouseLocation()
+                        for _, nm in ipairs({ "HitboxHead", "Head", "UpperTorso", "Torso", "LowerTorso", "HumanoidRootPart" }) do
+                            local p = target:FindFirstChild(nm)
+                            if p and p:IsA("BasePart") then
+                                local sp, onScreen = cam:WorldToViewportPoint(p.Position)
+                                if onScreen and sp.Z > 0 then
+                                    local d = (Vector2.new(sp.X, sp.Y) - mousePos).Magnitude
+                                    if d < silentFOV then
+                                        inFOV = true
+                                        break
+                                    end
+                                end
+                            end
+                        end
                     end
-                    if part then
-                        local look = CFrame.new(ws.CurrentCamera.CFrame.Position, part.Position)
-                        local newData = {}
-                        newData[utf8.char(1)] = {
-                            [utf8.char(0)] = util:EncodeCFrame(look),
-                            [utf8.char(1)] = util:EncodeCFrame(look),
-                            [utf8.char(2)] = part,
-                            [utf8.char(3)] = util:EncodeCFrame(
-                                part.CFrame:ToObjectSpace(CFrame.new(part.Position))
-                            ),
-                        }
-                        return oldFireServer(self, oid, action, newData, ...)
+
+                    if inFOV then
+                        local part
+                        if silentManipulation then
+                            part = target:FindFirstChild("HitboxHead")
+                                or target:FindFirstChild("Head")
+                        elseif silentClosestPart then
+                            part = getClosestPart(target)
+                        else
+                            part = target:FindFirstChild("Head")
+                                or target:FindFirstChild("HitboxHead")
+                        end
+
+                        -- ★ 2차 FOV 재검증: 선택된 부위가 FOV 안인지
+                        if part then
+                            local cam2 = ws.CurrentCamera
+                            local okFOV = false
+                            if cam2 then
+                                local sp2, onScreen2 = cam2:WorldToViewportPoint(part.Position)
+                                if onScreen2 and sp2.Z > 0 then
+                                    local mp = UserInputService:GetMouseLocation()
+                                    local d2 = (Vector2.new(sp2.X, sp2.Y) - mp).Magnitude
+                                    if d2 < silentFOV then okFOV = true end
+                                end
+                            end
+
+                            if okFOV then
+                                local look = CFrame.new(ws.CurrentCamera.CFrame.Position, part.Position)
+                                local newData = {}
+                                newData[utf8.char(1)] = {
+                                    [utf8.char(0)] = util:EncodeCFrame(look),
+                                    [utf8.char(1)] = util:EncodeCFrame(look),
+                                    [utf8.char(2)] = part,
+                                    [utf8.char(3)] = util:EncodeCFrame(
+                                        part.CFrame:ToObjectSpace(CFrame.new(part.Position))
+                                    ),
+                                }
+                                return oldFireServer(self, oid, action, newData, ...)
+                            end
+                        end
                     end
                 end
             end
@@ -1254,7 +1290,6 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
         notify("Target found: " .. (plr and plr.Name or "?"), 1.5)
     end
 
-    -- ★ 무조건 헤드
     local firePart = pickRageTargetPart(targetChar)
     if not firePart then firePart = head end
 
@@ -1425,7 +1460,7 @@ hideUIObject(rank2)
 hideUIObject(rank3)
 
 -- ============================================================
--- Silent Aim UI (올헤드 / 조준선 최근접 - 배타 처리)
+-- Silent Aim UI
 -- ============================================================
 SABox:AddCheckbox("SilentAim_Enabled", {
     Text = "Enabled", Default = true,
@@ -1436,7 +1471,7 @@ SABox:AddCheckbox("SilentAim_Enabled", {
 })
 
 SABox:AddCheckbox("SilentAim_Manipulation", {
-    Text = "올헤드 (Manipulation)", Default = false,
+    Text = "Manipulation", Default = false,
     Callback = function(v)
         silentManipulation = v
         Config.SilentAim.Manipulation = v
@@ -1453,7 +1488,7 @@ SABox:AddCheckbox("SilentAim_Manipulation", {
 })
 
 SABox:AddCheckbox("SilentAim_ClosestPart", {
-    Text = "조준선 최근접 (Closest Part)", Default = false,
+    Text = "Closest Part", Default = false,
     Callback = function(v)
         silentClosestPart = v
         Config.SilentAim.ClosestPart = v
