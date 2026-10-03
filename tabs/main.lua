@@ -32,9 +32,6 @@ local Config = {
         Radius = 100,
         HitChance = 100,
     },
-    Rage = {
-        AimMode = "Head",          -- "Head" (올헤드) / "Closest" (조준선 최근접)
-    },
     AutoPickup = { Enabled = true, Range = 250, Health = true, Ammo = true },
 }
 Hub.RageConfig = Config
@@ -269,7 +266,7 @@ local function getHead(character)
         or character:FindFirstChild("HitboxHead")
 end
 
--- ★ 조준선(마우스)에 가장 가까운 파트 반환 (전역으로 올림 - 사일런트 & 레이지 공용)
+-- 조준선(마우스)에 가장 가까운 파트 반환 (사일런트 전용)
 local function getClosestPart(character)
     if not character then return nil end
     local cam = ws.CurrentCamera
@@ -296,13 +293,9 @@ local function getClosestPart(character)
     return closest or getHead(character)
 end
 
--- ★ 레이지용 타겟 부위 선택기 (올헤드 / 조준선 최근접)
+-- ★ 레이지 전용: 무조건 헤드 (HitboxHead)
 local function pickRageTargetPart(character)
     if not character then return nil end
-    if Config.Rage.AimMode == "Closest" then
-        return getClosestPart(character)
-    end
-    -- 기본: 올헤드
     return character:FindFirstChild("HitboxHead")
         or character:FindFirstChild("Head")
 end
@@ -435,7 +428,7 @@ end
 _G.ToggleSilentHead = function(state) silentEnabled = state end
 
 -- ============================================================
--- Desync (레이지 위치 조작)
+-- Desync
 -- ============================================================
 local Desync = { _cframe = nil, _oldCFrame = nil, _part = nil, _mode = "off" }
 local function desyncSetEnemy(cf) Desync._cframe = cf Desync._mode = "enemy" end
@@ -863,7 +856,7 @@ RageModule.applySpeedBoost = applySpeedBoost
 RageModule.removeSpeedBoost = removeSpeedBoost
 
 -- ============================================================
--- ★ 레이지 발사: 올헤드/조준선 최근접 파트를 사용
+-- 레이지 발사 (무조건 헤드)
 -- ============================================================
 local function doFire(part)
     local fighter = getFighter()
@@ -1138,7 +1131,7 @@ if RageModule._heartbeatConn then
 end
 
 -- ============================================================
--- ★ 레이지 메인 루프 (올헤드/조준선 최근접 반영)
+-- 레이지 메인 루프 (무조건 헤드)
 -- ============================================================
 RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
     if not Config.Enabled then
@@ -1261,11 +1254,9 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
         notify("Target found: " .. (plr and plr.Name or "?"), 1.5)
     end
 
-    -- ★ 올헤드 / 조준선 최근접 부위 선택
+    -- ★ 무조건 헤드
     local firePart = pickRageTargetPart(targetChar)
-    if not firePart then
-        firePart = head  -- fallback
-    end
+    if not firePart then firePart = head end
 
     if currentIsMelee then
         if targetChar ~= meleeTarget then
@@ -1310,8 +1301,7 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
     if doFire(firePart) then
         if now - lastAttachAt > 1 then
             lastAttachAt = now
-            local mode = Config.Rage.AimMode == "Closest" and "조준선" or "올헤드"
-            notify("Attach -> fire (" .. mode .. ")", 1)
+            notify("Attach -> fire (Head)", 1)
         end
     end
 end)
@@ -1383,20 +1373,6 @@ RageBox:AddCheckbox("Enabled_Utility", {
     Text = "Use Utility", Default = false,
     Callback = function(v) Config.Weapons.Enabled.Utility = v end })
 
--- ★ 레이지 조준 방식 (올헤드 / 조준선 최근접)
-RBox:AddDropdown("RageAimMode", {
-    Text = "Rage 조준 방식",
-    Values = { "올헤드 (Head)", "조준선 최근접 (Closest)" },
-    Default = "올헤드 (Head)", Multi = false,
-    Callback = function(v)
-        if v == "조준선 최근접 (Closest)" then
-            Config.Rage.AimMode = "Closest"
-        else
-            Config.Rage.AimMode = "Head"
-        end
-    end,
-})
-
 RBox:AddCheckbox("UEAssistedRage", {
     Text = "UE Assisted Rage", Default = false,
     Callback = function(Value) setUERage(Value) end,
@@ -1464,7 +1440,6 @@ SABox:AddCheckbox("SilentAim_Manipulation", {
     Callback = function(v)
         silentManipulation = v
         Config.SilentAim.Manipulation = v
-        -- 조준선 최근접과 동시 ON 방지
         if v and silentClosestPart then
             silentClosestPart = false
             Config.SilentAim.ClosestPart = false
@@ -1482,7 +1457,6 @@ SABox:AddCheckbox("SilentAim_ClosestPart", {
     Callback = function(v)
         silentClosestPart = v
         Config.SilentAim.ClosestPart = v
-        -- 올헤드와 동시 ON 방지
         if v and silentManipulation then
             silentManipulation = false
             Config.SilentAim.Manipulation = false
