@@ -18,13 +18,20 @@ local Config = {
     EvasionMode = "Random",
     NotifyEvents = true,
     HitAboveY = 0.5,
-    SpeedBoostMult = 0,   -- ★ 항상 0 고정 (슬라이더 제거)
+    SpeedBoostMult = 0,
     Weapons = {
         Priority = { "Primary", "Secondary", "Melee" },
         Enabled  = { Primary = true, Secondary = true, Melee = true, Utility = false },
         OnEmpty  = "SwapOrReload",
     },
-    SilentAim = { Enabled = true, FOV = 2000 },
+    SilentAim = {
+        Enabled = true,
+        Manipulation = false,
+        ClosestPart = false,
+        ShowFOV = false,
+        Radius = 100,
+        HitChance = 100,
+    },
     AutoPickup = { Enabled = true, Range = 250, Health = true, Ammo = true },
 }
 Hub.RageConfig = Config
@@ -278,7 +285,56 @@ local util  = require(ReplicatedStorage.Modules.Utility)
 local enums = require(ReplicatedStorage.Modules.EnumLibrary)
 
 local silentEnabled = true
-local silentFOV = 2000
+local silentFOV = 100
+local silentManipulation = false
+local silentClosestPart = false
+local silentShowFOV = false
+local silentHitChance = 100
+
+-- FOV 원 그리기
+local fovCircle = nil
+local function createFOVCircle()
+    if fovCircle then return fovCircle end
+    local ok, circle = pcall(function()
+        local Drawing = Drawing or (getgenv and getgenv().Drawing)
+        if not Drawing then return nil end
+        local c = Drawing.new("Circle")
+        c.Thickness = 1
+        c.NumSides = 60
+        c.Radius = silentFOV
+        c.Filled = false
+        c.Visible = false
+        c.Color = Color3.fromRGB(255, 255, 255)
+        return c
+    end)
+    if ok then fovCircle = circle end
+    return fovCircle
+end
+
+-- 가장 가까운 부위 찾기
+local function getClosestPart(character)
+    if not character then return nil end
+    local cam = ws.CurrentCamera
+    if not cam then return getHead(character) end
+    local mousePos = UserInputService:GetMouseLocation()
+    local parts = {}
+    for _, name in ipairs({ "Head", "HitboxHead", "UpperTorso", "Torso", "LowerTorso", "HumanoidRootPart" }) do
+        local p = character:FindFirstChild(name)
+        if p then parts[#parts + 1] = p end
+    end
+    local closest, closestDist = nil, math.huge
+    for _, p in ipairs(parts) do
+        local pos, visible = cam:WorldToViewportPoint(p.Position)
+        if visible and pos.Z > 0 then
+            local d = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+            if d < closestDist then
+                closestDist = d
+                closest = p
+            end
+        end
+    end
+    return closest or getHead(character)
+end
 
 local function getHeadTarget()
     local mousePos = UserInputService:GetMouseLocation()
@@ -317,19 +373,31 @@ if not getgenv().__MinhoSilentAimHooked then
     if hookfunction and newcclosure then
         oldFireServer = hookfunction(useItemRemote.FireServer, newcclosure(function(self, oid, action, cameradata, ...)
             if silentEnabled and action == enums:ToEnum("StartShooting") then
+                -- Hit Chance 체크
+                if silentHitChance < 100 then
+                    if math.random(1, 100) > silentHitChance then
+                        return oldFireServer(self, oid, action, cameradata, ...)
+                    end
+                end
+
                 local target = getHeadTarget()
                 if target then
-                    local head = target:FindFirstChild("Head")
-                        or target:FindFirstChild("HitboxHead")
-                    if head then
-                        local look = CFrame.new(ws.CurrentCamera.CFrame.Position, head.Position)
+                    local part
+                    if silentClosestPart then
+                        part = getClosestPart(target)
+                    else
+                        part = target:FindFirstChild("Head")
+                            or target:FindFirstChild("HitboxHead")
+                    end
+                    if part then
+                        local look = CFrame.new(ws.CurrentCamera.CFrame.Position, part.Position)
                         local newData = {}
                         newData[utf8.char(1)] = {
                             [utf8.char(0)] = util:EncodeCFrame(look),
                             [utf8.char(1)] = util:EncodeCFrame(look),
-                            [utf8.char(2)] = head,
+                            [utf8.char(2)] = part,
                             [utf8.char(3)] = util:EncodeCFrame(
-                                head.CFrame:ToObjectSpace(CFrame.new(head.Position))
+                                part.CFrame:ToObjectSpace(CFrame.new(part.Position))
                             ),
                         }
                         return oldFireServer(self, oid, action, newData, ...)
@@ -765,7 +833,7 @@ local function applySpeedBoost()
         "Cooldown", "RecoveryTime", "ResetTime", "SwingTime", "SwingDelay",
         "ComboCooldown", "FireCooldown", "ReloadLength",
     }
-    local mult = Config.SpeedBoostMult  -- 항상 0
+    local mult = Config.SpeedBoostMult
     for name, data in pairs(lib.Items) do
         if type(data) == "table" then
             local orig = {}
@@ -776,8 +844,7 @@ local function applySpeedBoost()
                         data[f] = data[f] * mult
                     end
                 end
-            end
-            if next(orig) ~= nil then speedBoostOriginal[name] = orig end
+            end            if next(orig) ~= nil then speedBoostOriginal[name] = orig end
         end
     end
     if next(speedBoostOriginal) == nil then speedBoostOriginal = nil end
@@ -1245,14 +1312,37 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
 end)
 
 -- ============================================================
+-- FOV Circle 렌더링
+-- ============================================================
+RunService.RenderStepped:Connect(function()
+    if not silentShowFOV then
+        if fovCircle then fovCircle.Visible = false end
+        return
+    end
+    local c = createFOVCircle()
+    if not c then return end
+    local cam = ws.CurrentCamera
+    if not cam then return end
+    local viewport = cam.ViewportSize
+    local center = Vector2.new(viewport.X / 2, viewport.Y / 2)
+    c.Position = center
+    c.Radius = silentFOV
+    c.Visible = true
+end)
+
+-- ============================================================
 -- UI
 -- ============================================================
-local RageBox   = Main:AddGroupbox({ Name = "Ragebot", Side = 1 })
-local WCBox     = Main:AddGroupbox({ Name = "Weapon Config", Side = 1 })  -- Priority 숨김용으로만 유지
-local RBox      = Main:AddGroupbox({ Name = "Rage", Side = 2 })
-local SCBox     = Main:AddGroupbox({ Name = "Speed Control", Side = 2 })
+-- 왼쪽 (Side 1): Ragebot → Rage → Weapon Config
+local RageBox  = Main:AddGroupbox({ Name = "Ragebot", Side = 1 })
+local RBox     = Main:AddGroupbox({ Name = "Rage", Side = 1 })
+local WCBox    = Main:AddGroupbox({ Name = "Weapon Config", Side = 1 })
 
--- ===== Ragebot 박스 (순서: Enabled → Evasion → Notify → HitAboveY → OnEmptyAmmo → Weapon Types) =====
+-- 오른쪽 (Side 2): Silent Aim → Speed Control
+local SABox    = Main:AddGroupbox({ Name = "Silent Aim", Side = 2 })
+local SCBox    = Main:AddGroupbox({ Name = "Speed Control", Side = 2 })
+
+-- ===== Ragebot 박스 =====
 RageBox:AddCheckbox("RageEnabled", {
     Text = "Ragebot Enabled", Default = false,
     Callback = function(v) Config.Enabled = v end,
@@ -1294,7 +1384,25 @@ RageBox:AddCheckbox("Enabled_Utility", {
     Text = "Use Utility", Default = false,
     Callback = function(v) Config.Weapons.Enabled.Utility = v end })
 
--- ===== Priority 드롭다운: 기능 유지, UI에서만 숨김 =====
+-- ===== Rage 박스 =====
+RBox:AddCheckbox("UEAssistedRage", {
+    Text = "UE Assisted Rage", Default = false,
+    Callback = function(Value)
+        setUERage(Value)
+    end,
+})
+RBox:AddCheckbox("Underground", {
+    Text = "Underground", Default = false,
+    Callback = function(Value)
+        if Value then
+            startUnderground()
+        else
+            stopUnderground()
+        end
+    end,
+})
+
+-- ===== Weapon Config (Priority 숨김용) =====
 local ALL_CLASSES = { "Primary", "Secondary", "Melee" }
 local function makeRankDropdown(label, default, key)
     return WCBox:AddDropdown("Rank_" .. key, {
@@ -1335,29 +1443,61 @@ hideUIObject(rank1)
 hideUIObject(rank2)
 hideUIObject(rank3)
 
--- ===== Rage 박스 =====
-RBox:AddCheckbox("UEAssistedRage", {
-    Text = "UE Assisted Rage", Default = false,
-    Callback = function(Value)
-        setUERage(Value)
+-- ===== Silent Aim 박스 =====
+SABox:AddCheckbox("SilentAim_Enabled", {
+    Text = "Enabled", Default = true,
+    Callback = function(v)
+        silentEnabled = v
+        Config.SilentAim.Enabled = v
+    end,
+})
+SABox:AddCheckbox("SilentAim_Manipulation", {
+    Text = "Manipulation", Default = false,
+    Callback = function(v)
+        silentManipulation = v
+        Config.SilentAim.Manipulation = v
+    end,
+})
+SABox:AddCheckbox("SilentAim_ClosestPart", {
+    Text = "Closest Part", Default = false,
+    Callback = function(v)
+        silentClosestPart = v
+        Config.SilentAim.ClosestPart = v
+    end,
+})
+SABox:AddCheckbox("SilentAim_ShowFOV", {
+    Text = "Show FOV", Default = false,
+    Callback = function(v)
+        silentShowFOV = v
+        Config.SilentAim.ShowFOV = v
+        if not v and fovCircle then fovCircle.Visible = false end
+    end,
+})
+SABox:AddSlider("SilentAim_Radius", {
+    Text = "Radius",
+    Default = 100, Min = 5, Max = 2000,
+    Rounding = 0,
+    Suffix = " studs",
+    Callback = function(v)
+        v = math.floor(v / 5 + 0.5) * 5
+        silentFOV = v
+        Config.SilentAim.Radius = v
+        if fovCircle then fovCircle.Radius = v end
+    end,
+})
+SABox:AddSlider("SilentAim_HitChance", {
+    Text = "Hit Chance",
+    Default = 100, Min = 1, Max = 100,
+    Rounding = 0,
+    Suffix = "%",
+    Callback = function(v)
+        v = math.floor(v + 0.5)
+        silentHitChance = v
+        Config.SilentAim.HitChance = v
     end,
 })
 
-RBox:AddCheckbox("Underground", {
-    Text = "Underground", Default = false,
-    Callback = function(Value)
-        if Value then
-            startUnderground()
-        else
-            stopUnderground()
-        end
-    end,
-})
-
--- ============================================================
--- Speed Control
--- ============================================================
-
+-- ===== Speed Control 박스 =====
 SCBox:AddCheckbox("NoRecoilEnabled", {
     Text = "No Recoil",
     Default = false,
