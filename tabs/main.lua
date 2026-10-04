@@ -13,19 +13,22 @@ local Library           = Hub.Library
 local Toggles           = Library.Toggles
 local Options           = Library.Options
 
-task.defer(function()
-    if Library and Library.TabButtons then
-        for _, Entry in ipairs(Library.TabButtons) do
-            if Entry and Entry.Icon and Main and Main.Button then
-                if Entry.Label and Entry.Label.Parent and Entry.Label.Parent.Parent == Main.Button then
-                    local HouseIcon = Library:GetIcon("house")
-                    if HouseIcon then
-                        Library:ApplyLucideIcon(Entry.Icon, HouseIcon)
+task.spawn(function()
+    for _ = 1, 50 do
+        if Library and Library.TabButtons and #Library.TabButtons > 0 then
+            local HouseIcon = Library:GetIcon("house")
+            if HouseIcon then
+                for _, Entry in ipairs(Library.TabButtons) do
+                    if Entry and Entry.Icon and Entry.Label and Entry.Label.Text == "Main" then
+                        pcall(function()
+                            Library:ApplyLucideIcon(Entry.Icon, HouseIcon)
+                        end)
+                        return
                     end
-                    break
                 end
             end
         end
+        task.wait(0.1)
     end
 end)
 
