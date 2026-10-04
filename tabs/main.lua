@@ -18,13 +18,20 @@ local Config = {
     EvasionMode = "Random",
     NotifyEvents = true,
     HitAboveY = 0.5,
-    SpeedBoostMult = 0,   -- ★ 항상 0 고정 (슬라이더 제거)
+    SpeedBoostMult = 0,
     Weapons = {
         Priority = { "Primary", "Secondary", "Melee" },
         Enabled  = { Primary = true, Secondary = true, Melee = true, Utility = false },
         OnEmpty  = "SwapOrReload",
     },
-    SilentAim = { Enabled = true, FOV = 2000 },
+    SilentAim = {
+        Enabled = true,
+        Manipulation = false,
+        ClosestPart = false,
+        ShowFOV = false,
+        Radius = 100,
+        HitChance = 100,
+    },
     AutoPickup = { Enabled = true, Range = 250, Health = true, Ammo = true },
 }
 Hub.RageConfig = Config
@@ -259,6 +266,42 @@ local function getHead(character)
         or character:FindFirstChild("HitboxHead")
 end
 
+-- 사일런트용: 마우스(조준선)에 가장 가까운 부위, FOV 밖이면 nil
+local silentFOV = 100
+
+local function getClosestPart(character)
+    if not character then return nil end
+    local cam = ws.CurrentCamera
+    if not cam then return nil end
+    local mousePos = UserInputService:GetMouseLocation()
+    local parts = {}
+    for _, name in ipairs({ "Head", "HitboxHead", "UpperTorso", "Torso", "LowerTorso", "HumanoidRootPart",
+                             "LeftHand", "RightHand", "LeftFoot", "RightFoot",
+                             "LeftUpperArm", "RightUpperArm", "LeftUpperLeg", "RightUpperLeg" }) do
+        local p = character:FindFirstChild(name)
+        if p and p:IsA("BasePart") then parts[#parts + 1] = p end
+    end
+    local closest, closestDist = nil, silentFOV
+    for _, p in ipairs(parts) do
+        local pos, visible = cam:WorldToViewportPoint(p.Position)
+        if visible and pos.Z > 0 then
+            local d = (Vector2.new(pos.X, pos.Y) - mousePos).Magnitude
+            if d < closestDist then
+                closestDist = d
+                closest = p
+            end
+        end
+    end
+    return closest
+end
+
+-- ★ 레이지 전용: 무조건 헤드 (HitboxHead)
+local function pickRageTargetPart(character)
+    if not character then return nil end
+    return character:FindFirstChild("HitboxHead")
+        or character:FindFirstChild("Head")
+end
+
 local function isInMatch()
     local pg = LocalPlayer:FindFirstChild("PlayerGui")
     if not pg then return false end
@@ -278,7 +321,29 @@ local util  = require(ReplicatedStorage.Modules.Utility)
 local enums = require(ReplicatedStorage.Modules.EnumLibrary)
 
 local silentEnabled = true
-local silentFOV = 2000
+local silentManipulation = false
+local silentClosestPart = false
+local silentShowFOV = false
+local silentHitChance = 100
+
+local fovCircle = nil
+local function createFOVCircle()
+    if fovCircle then return fovCircle end
+    local ok, circle = pcall(function()
+        local Drawing = Drawing or (getgenv and getgenv().Drawing)
+        if not Drawing then return nil end
+        local c = Drawing.new("Circle")
+        c.Thickness = 1
+        c.NumSides = 60
+        c.Radius = silentFOV
+        c.Filled = false
+        c.Visible = false
+        c.Color = Color3.fromRGB(255, 255, 255)
+        return c
+    end)
+    if ok then fovCircle = circle end
+    return fovCircle
+end
 
 local function getHeadTarget()
     local mousePos = UserInputService:GetMouseLocation()
@@ -311,38 +376,9 @@ local function getHeadTarget()
     return closest
 end
 
-if not getgenv().__MinhoSilentAimHooked then
-    getgenv().__MinhoSilentAimHooked = true
-    local oldFireServer
-    if hookfunction and newcclosure then
-        oldFireServer = hookfunction(useItemRemote.FireServer, newcclosure(function(self, oid, action, cameradata, ...)
-            if silentEnabled and action == enums:ToEnum("StartShooting") then
-                local target = getHeadTarget()
-                if target then
-                    local head = target:FindFirstChild("Head")
-                        or target:FindFirstChild("HitboxHead")
-                    if head then
-                        local look = CFrame.new(ws.CurrentCamera.CFrame.Position, head.Position)
-                        local newData = {}
-                        newData[utf8.char(1)] = {
-                            [utf8.char(0)] = util:EncodeCFrame(look),
-                            [utf8.char(1)] = util:EncodeCFrame(look),
-                            [utf8.char(2)] = head,
-                            [utf8.char(3)] = util:EncodeCFrame(
-                                head.CFrame:ToObjectSpace(CFrame.new(head.Position))
-                            ),
-                        }
-                        return oldFireServer(self, oid, action, newData, ...)
-                    end
-                end
-            end
-            return oldFireServer(self, oid, action, cameradata, ...)
-        end))
-    end
-end
-
-_G.ToggleSilentHead = function(state) silentEnabled = state end
-
+-- ============================================================
+-- Desync
+-- ============================================================
 local Desync = { _cframe = nil, _oldCFrame = nil, _part = nil, _mode = "off" }
 local function desyncSetEnemy(cf) Desync._cframe = cf Desync._mode = "enemy" end
 local function desyncSetScatter(cf) Desync._cframe = cf Desync._mode = "scatter" end
@@ -370,27 +406,20 @@ local speedBoostOriginal = getgenv().__MinhoRageSpeedBoost or nil
 getgenv().__MinhoRageSpeedBoost = speedBoostOriginal
 
 -- ============================================================
--- No Spread
+-- NoSpread
 -- ============================================================
 local NoSpreadState = {
-    Hooked = false,
-    Method = nil,
-    Index = nil,
-    Original = nil,
-    Dummy = nil,
-    Bindings = nil,
+    Hooked = false, Method = nil, Index = nil,
+    Original = nil, Dummy = nil, Bindings = nil,
 }
 
 local function NoSpread_Load()
     if NoSpreadState.Hooked then return true end
-
     if not (setrawmetatable and clonefunction and debug.getupvalues and debug.setupvalue and getgc) then
         return false
     end
-
     local RS = ReplicatedStorage
     local LP = LocalPlayer
-
     local remote
     do
         local r = RS:FindFirstChild('Remotes')
@@ -399,7 +428,6 @@ local function NoSpread_Load()
         remote = f and f:FindFirstChild('UseItem')
     end
     if not (remote and remote:IsA('RemoteEvent')) then return false end
-
     local clientItem
     do
         local ps = LP:FindFirstChild('PlayerScripts')
@@ -410,7 +438,6 @@ local function NoSpread_Load()
         if ci then local ok, v = pcall(require, ci); if ok then clientItem = v end end
     end
     if type(clientItem) ~= 'table' then return false end
-
     local fromEnum
     do
         local md = RS:FindFirstChild('Modules')
@@ -460,10 +487,8 @@ local function NoSpread_Load()
                 UseItem = {
                     FireServer = function(_, objectId, encType, args)
                         local packet = {
-                            block = false,
-                            objectId = objectId,
-                            type = rawget(fromEnum, encType),
-                            args = args,
+                            block = false, objectId = objectId,
+                            type = rawget(fromEnum, encType), args = args,
                         }
                         Dispatch(packet)
                         if packet.block then return end
@@ -473,23 +498,17 @@ local function NoSpread_Load()
             },
         },
     }
-
     setrawmetatable(dummy, { __index = function() return remoteTree end })
 
     local inputMethod = rawget(clientItem, 'Input')
     if not inputMethod then return false end
 
-    local foundIndex = nil
-    local foundOriginal = nil
-
+    local foundIndex, foundOriginal = nil, nil
     for i, v in pairs(debug.getupvalues(inputMethod)) do
         if typeof(v) == 'Instance' and v == RS then
-            foundIndex = i
-            foundOriginal = v
-            break
+            foundIndex = i; foundOriginal = v; break
         end
     end
-
     if foundIndex == nil then
         for _, bundle in pairs(debug.getupvalues(inputMethod)) do
             if type(bundle) == 'table' then
@@ -504,7 +523,6 @@ local function NoSpread_Load()
             end
         end
     end
-
     if foundIndex == nil then return false end
 
     if type(foundIndex) == "table" then
@@ -536,11 +554,9 @@ end
 
 local function NoSpread_Unload()
     if not NoSpreadState.Hooked then return end
-
     local inputMethod = NoSpreadState.Method
     local index = NoSpreadState.Index
     local original = NoSpreadState.Original
-
     if inputMethod and index and original then
         if type(index) == "table" then
             pcall(function() index.bundle[index.key] = original end)
@@ -548,7 +564,6 @@ local function NoSpread_Unload()
             pcall(function() debug.setupvalue(inputMethod, index, original) end)
         end
     end
-
     NoSpreadState.Hooked = false
     NoSpreadState.Method = nil
     NoSpreadState.Index = nil
@@ -561,16 +576,12 @@ end
 RageModule.NoSpread_Load = NoSpread_Load
 RageModule.NoSpread_Unload = NoSpread_Unload
 
--- ============================================================
--- No Recoil
--- ============================================================
 local NoRecoilOriginals = getgenv().__MinhoNoRecoilOriginals or {}
 getgenv().__MinhoNoRecoilOriginals = NoRecoilOriginals
 
 local function applyNoRecoil()
     local ok, lib = pcall(function() return require(ReplicatedStorage.Modules.ItemLibrary) end)
     if not ok or not lib or type(lib.Items) ~= "table" then return end
-
     for _, data in pairs(lib.Items) do
         if type(data) == "table" and type(data.ShootRecoil) == "number" then
             if NoRecoilOriginals[data] == nil then
@@ -579,7 +590,6 @@ local function applyNoRecoil()
             data.ShootRecoil = 0
         end
     end
-
     local fighter = getFighter()
     if fighter and type(fighter.Items) == "table" then
         for _, item in pairs(fighter.Items) do
@@ -607,9 +617,6 @@ end
 RageModule.applyNoRecoil = applyNoRecoil
 RageModule.revertNoRecoil = revertNoRecoil
 
--- ============================================================
--- Special Skill Cooldowns
--- ============================================================
 local SPECIAL_BASE = 75
 
 local SpecialCooldownOriginals = getgenv().__MinhoSpecialCooldownOriginals or {
@@ -751,9 +758,6 @@ end
 
 RageModule.applySpecialCooldowns = applySpecialCooldowns
 
--- ============================================================
--- Speed Boost (항상 0 배율 적용)
--- ============================================================
 local function applySpeedBoost()
     if speedBoostOriginal ~= nil then return end
     local ok, lib = pcall(function() return require(ReplicatedStorage.Modules.ItemLibrary) end)
@@ -765,7 +769,7 @@ local function applySpeedBoost()
         "Cooldown", "RecoveryTime", "ResetTime", "SwingTime", "SwingDelay",
         "ComboCooldown", "FireCooldown", "ReloadLength",
     }
-    local mult = Config.SpeedBoostMult  -- 항상 0
+    local mult = Config.SpeedBoostMult
     for name, data in pairs(lib.Items) do
         if type(data) == "table" then
             local orig = {}
@@ -800,6 +804,9 @@ end
 RageModule.applySpeedBoost = applySpeedBoost
 RageModule.removeSpeedBoost = removeSpeedBoost
 
+-- ============================================================
+-- 레이지 발사 (무조건 헤드)
+-- ============================================================
 local function doFire(part)
     local fighter = getFighter()
     local item = fighter and fighter.EquippedItem
@@ -971,10 +978,7 @@ RunService.Heartbeat:Connect(function()
 end)
 
 local undergroundState = getgenv().__MinhoUndergroundState or {
-    Active = false,
-    Conn = nil,
-    NoclipConn = nil,
-    GroundY = nil,
+    Active = false, Conn = nil, NoclipConn = nil, GroundY = nil,
 }
 getgenv().__MinhoUndergroundState = undergroundState
 
@@ -1075,6 +1079,9 @@ if RageModule._heartbeatConn then
     pcall(function() RageModule._heartbeatConn:Disconnect() end)
 end
 
+-- ============================================================
+-- 레이지 메인 루프 (무조건 헤드)
+-- ============================================================
 RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
     if not Config.Enabled then
         if speedBoostOriginal then removeSpeedBoost() end
@@ -1196,6 +1203,9 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
         notify("Target found: " .. (plr and plr.Name or "?"), 1.5)
     end
 
+    local firePart = pickRageTargetPart(targetChar)
+    if not firePart then firePart = head end
+
     if currentIsMelee then
         if targetChar ~= meleeTarget then
             meleeCount = 0
@@ -1220,10 +1230,10 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
             return
         end
 
-        local targetPos = head.Position + Vector3.new(0, Config.HitAboveY, 0)
+        local targetPos = firePart.Position + Vector3.new(0, Config.HitAboveY, 0)
         desyncSetEnemy(CFrame.new(targetPos))
         desyncPush(root)
-        if doFire(head) then
+        if doFire(firePart) then
             meleeCount += 1
             if now - lastMeleeAt > 0.3 then
                 lastMeleeAt = now
@@ -1233,26 +1243,43 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
         return
     end
 
-    local targetPos = head.Position + Vector3.new(0, Config.HitAboveY, 0)
+    local targetPos = firePart.Position + Vector3.new(0, Config.HitAboveY, 0)
     desyncSetEnemy(CFrame.new(targetPos))
     desyncPush(root)
-    if doFire(head) then
+    if doFire(firePart) then
         if now - lastAttachAt > 1 then
             lastAttachAt = now
-            notify("Attach -> fire", 1)
+            notify("Attach -> fire (Head)", 1)
         end
     end
 end)
 
--- ============================================================
--- UI
--- ============================================================
-local RageBox   = Main:AddGroupbox({ Name = "Ragebot", Side = 1 })
-local WCBox     = Main:AddGroupbox({ Name = "Weapon Config", Side = 1 })  -- Priority 숨김용으로만 유지
-local RBox      = Main:AddGroupbox({ Name = "Rage", Side = 2 })
-local SCBox     = Main:AddGroupbox({ Name = "Speed Control", Side = 2 })
+RunService.RenderStepped:Connect(function()
+    if not silentShowFOV then
+        if fovCircle then fovCircle.Visible = false end
+        return
+    end
+    local c = createFOVCircle()
+    if not c then return end
+    local cam = ws.CurrentCamera
+    if not cam then return end
+    local viewport = cam.ViewportSize
+    local center = Vector2.new(viewport.X / 2, viewport.Y / 2)
+    c.Position = center
+    c.Radius = silentFOV
+    c.Visible = true
+end)
 
--- ===== Ragebot 박스 (순서: Enabled → Evasion → Notify → HitAboveY → OnEmptyAmmo → Weapon Types) =====
+-- ============================================================
+-- UI 그룹박스
+-- ============================================================
+local RageBox  = Main:AddGroupbox({ Name = "Ragebot", Side = 1 })
+local RBox     = Main:AddGroupbox({ Name = "Rage", Side = 1 })
+local WCBox    = Main:AddGroupbox({ Name = "Weapon Config", Side = 1 })
+
+local SABox    = Main:AddGroupbox({ Name = "Silent Aim", Side = 2 })
+local SCBox    = Main:AddGroupbox({ Name = "Speed Control", Side = 2 })
+
 RageBox:AddCheckbox("RageEnabled", {
     Text = "Ragebot Enabled", Default = false,
     Callback = function(v) Config.Enabled = v end,
@@ -1294,7 +1321,17 @@ RageBox:AddCheckbox("Enabled_Utility", {
     Text = "Use Utility", Default = false,
     Callback = function(v) Config.Weapons.Enabled.Utility = v end })
 
--- ===== Priority 드롭다운: 기능 유지, UI에서만 숨김 =====
+RBox:AddCheckbox("UEAssistedRage", {
+    Text = "UE Assisted Rage", Default = false,
+    Callback = function(Value) setUERage(Value) end,
+})
+RBox:AddCheckbox("Underground", {
+    Text = "Underground", Default = false,
+    Callback = function(Value)
+        if Value then startUnderground() else stopUnderground() end
+    end,
+})
+
 local ALL_CLASSES = { "Primary", "Secondary", "Melee" }
 local function makeRankDropdown(label, default, key)
     return WCBox:AddDropdown("Rank_" .. key, {
@@ -1335,29 +1372,86 @@ hideUIObject(rank1)
 hideUIObject(rank2)
 hideUIObject(rank3)
 
--- ===== Rage 박스 =====
-RBox:AddCheckbox("UEAssistedRage", {
-    Text = "UE Assisted Rage", Default = false,
-    Callback = function(Value)
-        setUERage(Value)
+-- ============================================================
+-- Silent Aim UI
+-- ============================================================
+SABox:AddCheckbox("SilentAim_Enabled", {
+    Text = "Enabled", Default = true,
+    Callback = function(v)
+        silentEnabled = v
+        Config.SilentAim.Enabled = v
     end,
 })
 
-RBox:AddCheckbox("Underground", {
-    Text = "Underground", Default = false,
-    Callback = function(Value)
-        if Value then
-            startUnderground()
-        else
-            stopUnderground()
+SABox:AddCheckbox("SilentAim_Manipulation", {
+    Text = "Manipulation", Default = false,
+    Callback = function(v)
+        silentManipulation = v
+        Config.SilentAim.Manipulation = v
+        if v and silentClosestPart then
+            silentClosestPart = false
+            Config.SilentAim.ClosestPart = false
+            pcall(function()
+                if Toggles["SilentAim_ClosestPart"] then
+                    Toggles["SilentAim_ClosestPart"]:SetValue(false)
+                end
+            end)
         end
     end,
 })
 
--- ============================================================
--- Speed Control
--- ============================================================
+SABox:AddCheckbox("SilentAim_ClosestPart", {
+    Text = "Closest Part", Default = false,
+    Callback = function(v)
+        silentClosestPart = v
+        Config.SilentAim.ClosestPart = v
+        if v and silentManipulation then
+            silentManipulation = false
+            Config.SilentAim.Manipulation = false
+            pcall(function()
+                if Toggles["SilentAim_Manipulation"] then
+                    Toggles["SilentAim_Manipulation"]:SetValue(false)
+                end
+            end)
+        end
+    end,
+})
 
+SABox:AddCheckbox("SilentAim_ShowFOV", {
+    Text = "Show FOV", Default = false,
+    Callback = function(v)
+        silentShowFOV = v
+        Config.SilentAim.ShowFOV = v
+        if not v and fovCircle then fovCircle.Visible = false end
+    end,
+})
+SABox:AddSlider("SilentAim_Radius", {
+    Text = "Radius",
+    Default = 100, Min = 5, Max = 2000,
+    Rounding = 0,
+    Suffix = " studs",
+    Callback = function(v)
+        v = math.floor(v / 5 + 0.5) * 5
+        silentFOV = v
+        Config.SilentAim.Radius = v
+        if fovCircle then fovCircle.Radius = v end
+    end,
+})
+SABox:AddSlider("SilentAim_HitChance", {
+    Text = "Hit Chance",
+    Default = 100, Min = 1, Max = 100,
+    Rounding = 0,
+    Suffix = "%",
+    Callback = function(v)
+        v = math.floor(v + 0.5)
+        silentHitChance = v
+        Config.SilentAim.HitChance = v
+    end,
+})
+
+-- ============================================================
+-- Speed Control UI
+-- ============================================================
 SCBox:AddCheckbox("NoRecoilEnabled", {
     Text = "No Recoil",
     Default = false,
@@ -1388,9 +1482,7 @@ SCBox:AddCheckbox("NoSpread", {
                 end
             end
         else
-            if RageModule.NoSpread_Unload then
-                RageModule.NoSpread_Unload()
-            end
+            if RageModule.NoSpread_Unload then RageModule.NoSpread_Unload() end
         end
     end,
 })
