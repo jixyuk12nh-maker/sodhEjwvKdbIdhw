@@ -8,7 +8,6 @@ local LocalPlayer       = Hub.LocalPlayer
 local CosmeticsWrap = {}
 CosmeticsWrap._cache = {}
 
--- [FIX] 실패도 캐시에 저장해 반복 pcall 방지
 function CosmeticsWrap._require(key, fn)
     local hit = CosmeticsWrap._cache[key]
     if hit ~= nil then
@@ -121,9 +120,6 @@ function CosmeticsWrap.charmAssets()
     end)
 end
 
--- ============================================================
--- DataHook
--- ============================================================
 CosmeticsWrap.DataHook = {
     spoofs = {},
     restore = nil,
@@ -148,12 +144,10 @@ function CosmeticsWrap.DataHook.load(current)
         end,
         __newindex = function(_, key, value) inner[key] = value end,
         __len = function() return #inner end,
-        -- [FIX] Luau __iter 시그니처에 맞춤
         __iter = function() return next, inner, nil end,
     })
     rawset(current, "Data", proxy)
     hook.restore = { current = current, inner = inner }
-    -- [FIX] signal 캐시도 함께 초기화
     hook._signalCache = {}
     return true
 end
@@ -208,7 +202,6 @@ function CosmeticsWrap.DataHook.getOriginal(field)
     return restore.inner[field]
 end
 
--- [FIX] current 인스턴스도 키에 포함해 잘못된 시그널 재사용 방지
 function CosmeticsWrap.DataHook._signal(current, field)
     local cache = CosmeticsWrap.DataHook._signalCache
     local key = tostring(current) .. "|" .. field
@@ -233,7 +226,6 @@ function CosmeticsWrap.DataHook.trigger(field)
     if current == nil then return end
     local sig = CosmeticsWrap.DataHook._signal(current, field)
     if sig ~= nil then
-        -- [FIX] 실패 시 로깅
         local ok, err = pcall(function() sig:Fire(current.Data[field], field) end)
         if not ok then warn("[CosmeticsWrap] trigger failed:", field, err) end
     end
@@ -253,9 +245,6 @@ function CosmeticsWrap.DataHook.destroy()
     for _, field in ipairs(fields) do hook.trigger(field) end
 end
 
--- ============================================================
--- ItemHook
--- ============================================================
 CosmeticsWrap.ItemHook = { ALIAS = "GetWeaponData\0ohaio", restore = nil, _targetFn = nil }
 
 function CosmeticsWrap.ItemHook.target()
@@ -294,7 +283,6 @@ function CosmeticsWrap.ItemHook.applyCosmetics(data, selection)
         local value = selection[slot]
 
         if value == nil then
-            -- skip
         elseif value == "NONE_COSMETIC" then
             data[kind] = nil
             changed = true
@@ -382,9 +370,6 @@ function CosmeticsWrap.ItemHook.revert()
     end
 end
 
--- ============================================================
--- Scene
--- ============================================================
 CosmeticsWrap.Scene = {
     _equipmentQueued = false,
     _selectionQueued = false,
@@ -421,7 +406,6 @@ function CosmeticsWrap.Scene.run(thunks)
     if not ok then warn("[CosmeticsWrap] scene: " .. tostring(err)) end
 end
 
--- [FIX] 캐시 무효화 함수 추가
 function CosmeticsWrap.Scene.invalidateObjects()
     CosmeticsWrap.Scene._objectsCache = nil
     CosmeticsWrap.Scene._objectsCacheTime = 0
@@ -464,7 +448,6 @@ function CosmeticsWrap.Scene.encodeKeys(tbl)
     return out
 end
 
--- [FIX] skin/wrap/charm 타입 가드
 function CosmeticsWrap.Scene.buildViewModelData(itemName, selection)
     local name = itemName
     local skin = selection ~= nil and selection.skin or nil
@@ -581,7 +564,7 @@ function CosmeticsWrap.Scene.reloadEquipped()
             local itemName = rawget(item, "Name")
             if itemName ~= nil then
                 local selection = CosmeticsWrap.selections[itemName]
-                if selection ~= nil then
+                if type(selection) == "table" then
                     CosmeticsWrap.Scene.reloadViewModel(item, itemName, selection)
                 end
             end
@@ -605,7 +588,6 @@ function CosmeticsWrap.Scene.refreshEquipmentView()
 end
 
 CosmeticsWrap.Scene._refreshQueued = false
--- [FIX] 매 refresh마다 objects 캐시 무효화
 function CosmeticsWrap.Scene.requestRefresh()
     if CosmeticsWrap.Scene._refreshQueued then return end
     CosmeticsWrap.Scene._refreshQueued = true
@@ -641,7 +623,7 @@ function CosmeticsWrap.Scene.installViewModelProvider()
         if owner == LocalPlayer and itemName ~= nil then
             local selection = CosmeticsWrap.selections[itemName]
 
-            if selection ~= nil then
+            if type(selection) == "table" then
                 local patched = CosmeticsWrap.Scene.buildViewModelData(itemName, selection)
                 local enumLib = CosmeticsWrap.enumLibrary()
 
@@ -702,7 +684,7 @@ function CosmeticsWrap.Scene.installIconProvider()
         if type(weaponData) == "table" then
             local weaponName = weaponData.Name
             local selection = weaponName and CosmeticsWrap.selections[weaponName]
-            local skin = selection and selection.skin
+            local skin = type(selection) == "table" and selection.skin or nil
             if type(skin) == "string" and skin ~= "RANDOM_COSMETIC"
                 and not string.match(skin, "^NONE_COSMETIC") then
                 local viewModels = self.ViewModels
@@ -736,10 +718,8 @@ function CosmeticsWrap.Scene.uninstallIconProvider()
     CosmeticsWrap.Scene._iconInstalled = false
 end
 
--- ============================================================
--- Rank / RankCharm
--- ============================================================
 CosmeticsWrap.selections = {}
+CosmeticsWrap.selections._seasonCharms = {}
 CosmeticsWrap._enabled = false
 
 CosmeticsWrap.Rank = CosmeticsWrap.Rank or {
@@ -880,9 +860,6 @@ end
 CosmeticsWrap._loadRankProfile = loadRankProfile
 loadRankProfile()
 
--- ============================================================
--- enable / disable
--- ============================================================
 function CosmeticsWrap.enable()
     if CosmeticsWrap._enabled then return true end
     CosmeticsWrap.DataHook.initialize()
@@ -894,7 +871,6 @@ function CosmeticsWrap.enable()
         return false
     end
     CosmeticsWrap._enabled = true
-    -- [FIX] 초기 상태 즉시 반영
     task.defer(function()
         CosmeticsWrap.applyAll()
     end)
@@ -911,7 +887,6 @@ function CosmeticsWrap.disable()
     return true
 end
 
--- [FIX] 큐 방식 reload — 여러 무기 동시 반영
 CosmeticsWrap._reloadQueue = CosmeticsWrap._reloadQueue or {}
 CosmeticsWrap._reloadScheduled = false
 
@@ -949,7 +924,6 @@ end
 
 function CosmeticsWrap.set(weaponName, selection)
     CosmeticsWrap.selections[weaponName] = selection
-    -- [FIX] 캐시 즉시 무효화
     CosmeticsWrap.Scene.invalidateObjects()
     CosmeticsWrap.DataHook.trigger("WeaponInventory")
     CosmeticsWrap.DataHook.trigger("CosmeticInventory")
@@ -959,6 +933,7 @@ function CosmeticsWrap.set(weaponName, selection)
 end
 
 function CosmeticsWrap.clear(weaponName)
+    if weaponName == "_seasonCharms" then return end
     CosmeticsWrap.selections[weaponName] = nil
     CosmeticsWrap.Scene.invalidateObjects()
     CosmeticsWrap.DataHook.trigger("WeaponInventory")
@@ -970,7 +945,9 @@ end
 
 function CosmeticsWrap.applyAll()
     for weaponName, selection in pairs(CosmeticsWrap.selections) do
-        CosmeticsWrap.Scene.reloadAll(weaponName, selection)
+        if type(selection) == "table" and not string.match(weaponName, "^_") then
+            CosmeticsWrap.Scene.reloadAll(weaponName, selection)
+        end
     end
     CosmeticsWrap.Scene.reloadEquipped()
     CosmeticsWrap.Scene.invalidateObjects()
@@ -989,9 +966,6 @@ if LocalPlayer.CharacterAdded then
     end)
 end
 
--- ============================================================
--- UI
--- ============================================================
 local Cosmetics = Hub.Tabs.Cosmetics
 
 local SeasonCharmOverrideBox = Cosmetics:AddGroupbox({ Name = "Season Charm Override", Side = 2 })
@@ -1004,7 +978,6 @@ local SeasonRankNames = CosmeticsWrap.Rank.RANK_NAMES or {}
 
 local SeasonCharmDrop, SeasonRankDrop, SeasonLeaderboardRank
 
--- [FIX] 재진입 가드
 local _applyingSeasonCharm = false
 local function applySeasonCharm()
     if _applyingSeasonCharm then return end
@@ -1019,7 +992,12 @@ local function applySeasonCharm()
         if place < 1 then place = nil end
     end
 
+    if type(CosmeticsWrap.selections._seasonCharms) ~= "table" then
+        CosmeticsWrap.selections._seasonCharms = {}
+    end
+
     if charmName == nil or charmName == "None" then
+        CosmeticsWrap.selections._seasonCharms = {}
         for _, name in ipairs(CosmeticsWrap.Rank.SEASON_CHARM_NAMES or {}) do
             pcall(function()
                 CosmeticsWrap.RankCharm:SetForSeason(name, nil, nil)
@@ -1027,11 +1005,12 @@ local function applySeasonCharm()
         end
         task.defer(function()
             for weapon, selection in pairs(CosmeticsWrap.selections) do
-                if selection ~= nil and selection.charm ~= nil then
+                if type(selection) == "table" and selection.charm ~= nil then
                     CosmeticsWrap.Scene.reloadAll(weapon, selection)
                 end
             end
             CosmeticsWrap.Scene.requestRefresh()
+            CosmeticsWrap.syncStateToInput()
             _applyingSeasonCharm = false
         end)
         return
@@ -1044,17 +1023,23 @@ local function applySeasonCharm()
             CosmeticsWrap.RankCharm:SetForSeason(charmName, rankName, place)
         end)
         if ok then
+            CosmeticsWrap.selections._seasonCharms[charmName] = {
+                rank = rankName,
+                place = place,
+            }
             task.defer(function()
                 for weapon, selection in pairs(CosmeticsWrap.selections) do
-                    -- [FIX] charm은 문자열/테이블 모두 대응
-                    local selCharm = selection and selection.charm
-                    local selName = type(selCharm) == "table"
-                        and (selCharm.Name or selCharm.name) or selCharm
-                    if selName == charmName then
-                        CosmeticsWrap.Scene.reloadAll(weapon, selection)
+                    if type(selection) == "table" then
+                        local selCharm = selection.charm
+                        local selName = type(selCharm) == "table"
+                            and (selCharm.Name or selCharm.name) or selCharm
+                        if selName == charmName then
+                            CosmeticsWrap.Scene.reloadAll(weapon, selection)
+                        end
                     end
                 end
                 CosmeticsWrap.Scene.requestRefresh()
+                CosmeticsWrap.syncStateToInput()
                 _applyingSeasonCharm = false
             end)
             return
@@ -1141,9 +1126,47 @@ task.spawn(function()
         return game:GetService("HttpService"):JSONDecode(raw)
     end)
     if ok and type(decoded) == "table" then
+        local seasonCharms = decoded._seasonCharms
+        decoded._seasonCharms = nil
+
         CosmeticsWrap.selections = decoded
+        CosmeticsWrap.selections._seasonCharms = seasonCharms or {}
+
         task.wait(1)
+
+        if type(seasonCharms) == "table" then
+            for charmName, entry in pairs(seasonCharms) do
+                if type(entry) == "table" and entry.rank ~= nil then
+                    pcall(function()
+                        CosmeticsWrap.RankCharm:SetForSeason(
+                            charmName, entry.rank, entry.place)
+                    end)
+                end
+            end
+        end
+
         CosmeticsWrap.applyAll()
+
+        task.defer(function()
+            if type(seasonCharms) ~= "table" then return end
+            for charmName, entry in pairs(seasonCharms) do
+                if type(entry) == "table" and entry.rank ~= nil then
+                    if SeasonCharmDrop then
+                        pcall(function() SeasonCharmDrop:SetValue(charmName) end)
+                    end
+                    if SeasonRankDrop then
+                        pcall(function() SeasonRankDrop:SetValue(entry.rank) end)
+                    end
+                    if SeasonLeaderboardRank and entry.place then
+                        pcall(function()
+                            SeasonLeaderboardRank:SetValue(tostring(entry.place))
+                        end)
+                    end
+                    break
+                end
+            end
+        end)
+
         print("[Cosmetics] Loaded saved state")
     end
 end)
@@ -1754,7 +1777,9 @@ end)
 
 Group:AddButton("Reset All", function()
     for weapon in pairs(CosmeticsWrap.selections) do
-        CosmeticsWrap.clear(weapon)
+        if weapon ~= "_seasonCharms" then
+            CosmeticsWrap.clear(weapon)
+        end
     end
 end)
 
