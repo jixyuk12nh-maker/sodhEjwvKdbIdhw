@@ -50,13 +50,13 @@ Hub.Window = Hub.Library:CreateWindow({
 })
 
 Hub.Tabs = {
-    Main      = Hub.Window:AddTab("Main"),
-    World     = Hub.Window:AddTab("World"),
-    Visuals   = Hub.Window:AddTab("Visuals"),
-    Character = Hub.Window:AddTab("Character"),
-    Cosmetics = Hub.Window:AddTab("Cosmetics"),
-    Misc      = Hub.Window:AddTab("Misc"),
-    Settings  = Hub.Window:AddTab("Settings"),
+    Main      = Hub.Window:AddTab("Main", "house"),
+    World     = Hub.Window:AddTab("World", "globe"),
+    Visuals   = Hub.Window:AddTab("Visuals", "eye"),
+    Character = Hub.Window:AddTab("Character", "user"),
+    Cosmetics = Hub.Window:AddTab("Cosmetics", "shirt"),
+    Misc      = Hub.Window:AddTab("Misc", "settings"),
+    Settings  = Hub.Window:AddTab("Settings", "settings-2"),
 }
 
 local Players           = game:GetService("Players")
