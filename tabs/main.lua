@@ -14,16 +14,16 @@ local Toggles           = Library.Toggles
 local Options           = Library.Options
 
 task.defer(function()
-    if not (Library and Library.TabButtons and Main) then return end
-    for _, Entry in ipairs(Library.TabButtons) do
-        if Entry and Entry.Icon and Entry.Label then
-            local Btn = Entry.Label:FindFirstAncestorOfClass("TextButton")
-            if Btn and Btn == Main.Button then
-                local HouseIcon = Library:GetIcon("house")
-                if HouseIcon then
-                    Library:ApplyLucideIcon(Entry.Icon, HouseIcon)
+    if Library and Library.TabButtons then
+        for _, Entry in ipairs(Library.TabButtons) do
+            if Entry and Entry.Icon and Main and Main.Button then
+                if Entry.Label and Entry.Label.Parent and Entry.Label.Parent.Parent == Main.Button then
+                    local HouseIcon = Library:GetIcon("house")
+                    if HouseIcon then
+                        Library:ApplyLucideIcon(Entry.Icon, HouseIcon)
+                    end
+                    break
                 end
-                break
             end
         end
     end
@@ -1355,6 +1355,7 @@ end)
 
 local RageBox  = Main:AddGroupbox({ Name = "Ragebot", Side = 1, IconName = "target" })
 local RBox     = Main:AddGroupbox({ Name = "Rage", Side = 1, IconName = "zap" })
+local WCBox    = Main:AddGroupbox({ Name = "Weapon Config", Side = 1, IconName = "crosshair" })
 
 local SABox    = Main:AddGroupbox({ Name = "Silent Aim", Side = 2, IconName = "focus" })
 local SCBox    = Main:AddGroupbox({ Name = "Speed Control", Side = 2, IconName = "gauge" })
@@ -1410,6 +1411,46 @@ RBox:AddCheckbox("Underground", {
         if Value then startUnderground() else stopUnderground() end
     end,
 })
+
+local ALL_CLASSES = { "Primary", "Secondary", "Melee" }
+local function makeRankDropdown(label, default, key)
+    return WCBox:AddDropdown("Rank_" .. key, {
+        Text = label, Values = ALL_CLASSES, Default = default, Multi = false,
+        Visible = false,
+        Callback = function(v) Config.Weapons.Priority[key] = v end,
+    })
+end
+
+local rank1 = makeRankDropdown("Priority 1", "Primary", 1)
+local rank2 = makeRankDropdown("Priority 2", "Secondary", 2)
+local rank3 = makeRankDropdown("Priority 3", "Melee", 3)
+
+local function hideUIObject(obj)
+    if obj == nil or type(obj) ~= "table" then return end
+    local candidates = {
+        obj.Frame, obj.Container, obj.Object, obj.Title,
+        obj.UIElements, obj.Holder, obj.HolderFrame, obj.Background,
+    }
+    for _, c in ipairs(candidates) do
+        if c ~= nil then
+            if type(c) == "table" then
+                for _, e in pairs(c) do
+                    if type(e) == "table" and e.Visible ~= nil then
+                        pcall(function() e.Visible = false end)
+                    elseif typeof(e) == "Instance" and e:IsA("GuiObject") then
+                        pcall(function() e.Visible = false end)
+                    end
+                end
+            elseif typeof(c) == "Instance" and c:IsA("GuiObject") then
+                pcall(function() c.Visible = false end)
+            end
+        end
+    end
+end
+
+hideUIObject(rank1)
+hideUIObject(rank2)
+hideUIObject(rank3)
 
 SABox:AddCheckbox("SilentAim_Enabled", {
     Text = "Enabled", Default = true,
