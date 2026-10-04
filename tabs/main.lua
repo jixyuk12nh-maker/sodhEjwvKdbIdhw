@@ -266,8 +266,7 @@ local function getHead(character)
         or character:FindFirstChild("HitboxHead")
 end
 
--- 사일런트용: 마우스(조준선)에 가장 가까운 부위, FOV 밖이면 nil
-local silentFOV = 100     -- ★ getClosestPart에서 참조하므로 미리 선언
+local silentFOV = 100
 
 local function getClosestPart(character)
     if not character then return nil end
@@ -295,7 +294,6 @@ local function getClosestPart(character)
     return closest
 end
 
--- ★ 레이지 전용: 무조건 헤드 (HitboxHead)
 local function pickRageTargetPart(character)
     if not character then return nil end
     return character:FindFirstChild("HitboxHead")
@@ -345,7 +343,6 @@ local function createFOVCircle()
     return fovCircle
 end
 
--- ★ FOV 이내에서 가장 가까운 적 (Head 기준)
 local function getHeadTarget()
     local mousePos = UserInputService:GetMouseLocation()
     local closest, closestDist = nil, silentFOV
@@ -377,9 +374,6 @@ local function getHeadTarget()
     return closest
 end
 
--- ============================================================
--- 사일런트 에임 후킹
--- ============================================================
 if not getgenv().__MinhoSilentAimHooked then
     getgenv().__MinhoSilentAimHooked = true
     local oldFireServer
@@ -394,7 +388,6 @@ if not getgenv().__MinhoSilentAimHooked then
 
                 local target = getHeadTarget()
                 if target then
-                    -- ★ 1차 FOV 검증: 대상의 어느 파트든 FOV 안이어야 함
                     local inFOV = false
                     local cam = ws.CurrentCamera
                     if cam then
@@ -426,7 +419,6 @@ if not getgenv().__MinhoSilentAimHooked then
                                 or target:FindFirstChild("HitboxHead")
                         end
 
-                        -- ★ 2차 FOV 재검증: 선택된 부위가 FOV 안인지
                         if part then
                             local cam2 = ws.CurrentCamera
                             local okFOV = false
@@ -463,9 +455,6 @@ end
 
 _G.ToggleSilentHead = function(state) silentEnabled = state end
 
--- ============================================================
--- Desync
--- ============================================================
 local Desync = { _cframe = nil, _oldCFrame = nil, _part = nil, _mode = "off" }
 local function desyncSetEnemy(cf) Desync._cframe = cf Desync._mode = "enemy" end
 local function desyncSetScatter(cf) Desync._cframe = cf Desync._mode = "scatter" end
@@ -492,9 +481,6 @@ end
 local speedBoostOriginal = getgenv().__MinhoRageSpeedBoost or nil
 getgenv().__MinhoRageSpeedBoost = speedBoostOriginal
 
--- ============================================================
--- NoSpread
--- ============================================================
 local NoSpreadState = {
     Hooked = false, Method = nil, Index = nil,
     Original = nil, Dummy = nil, Bindings = nil,
@@ -891,9 +877,6 @@ end
 RageModule.applySpeedBoost = applySpeedBoost
 RageModule.removeSpeedBoost = removeSpeedBoost
 
--- ============================================================
--- 레이지 발사 (무조건 헤드)
--- ============================================================
 local function doFire(part)
     local fighter = getFighter()
     local item = fighter and fighter.EquippedItem
@@ -1166,9 +1149,6 @@ if RageModule._heartbeatConn then
     pcall(function() RageModule._heartbeatConn:Disconnect() end)
 end
 
--- ============================================================
--- 레이지 메인 루프 (무조건 헤드)
--- ============================================================
 RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
     if not Config.Enabled then
         if speedBoostOriginal then removeSpeedBoost() end
@@ -1357,15 +1337,12 @@ RunService.RenderStepped:Connect(function()
     c.Visible = true
 end)
 
--- ============================================================
--- UI 그룹박스
--- ============================================================
-local RageBox  = Main:AddGroupbox({ Name = "Ragebot", Side = 1 })
-local RBox     = Main:AddGroupbox({ Name = "Rage", Side = 1 })
-local WCBox    = Main:AddGroupbox({ Name = "Weapon Config", Side = 1 })
+local RageBox  = Main:AddGroupbox({ Name = "Ragebot", Side = 1, IconName = "target" })
+local RBox     = Main:AddGroupbox({ Name = "Rage", Side = 1, IconName = "zap" })
+local WCBox    = Main:AddGroupbox({ Name = "Weapon Config", Side = 1, IconName = "crosshair" })
 
-local SABox    = Main:AddGroupbox({ Name = "Silent Aim", Side = 2 })
-local SCBox    = Main:AddGroupbox({ Name = "Speed Control", Side = 2 })
+local SABox    = Main:AddGroupbox({ Name = "Silent Aim", Side = 2, IconName = "focus" })
+local SCBox    = Main:AddGroupbox({ Name = "Speed Control", Side = 2, IconName = "gauge" })
 
 RageBox:AddCheckbox("RageEnabled", {
     Text = "Ragebot Enabled", Default = false,
@@ -1459,9 +1436,6 @@ hideUIObject(rank1)
 hideUIObject(rank2)
 hideUIObject(rank3)
 
--- ============================================================
--- Silent Aim UI
--- ============================================================
 SABox:AddCheckbox("SilentAim_Enabled", {
     Text = "Enabled", Default = true,
     Callback = function(v)
@@ -1536,9 +1510,6 @@ SABox:AddSlider("SilentAim_HitChance", {
     end,
 })
 
--- ============================================================
--- Speed Control UI
--- ============================================================
 SCBox:AddCheckbox("NoRecoilEnabled", {
     Text = "No Recoil",
     Default = false,
