@@ -13,6 +13,22 @@ local Library           = Hub.Library
 local Toggles           = Library.Toggles
 local Options           = Library.Options
 
+task.defer(function()
+    if Library and Library.TabButtons then
+        for _, Entry in ipairs(Library.TabButtons) do
+            if Entry and Entry.Icon and Main and Main.Button then
+                if Entry.Label and Entry.Label.Parent and Entry.Label.Parent.Parent == Main.Button then
+                    local HouseIcon = Library:GetIcon("house")
+                    if HouseIcon then
+                        Library:ApplyLucideIcon(Entry.Icon, HouseIcon)
+                    end
+                    break
+                end
+            end
+        end
+    end
+end)
+
 local Config = {
     Enabled = false,
     EvasionMode = "Random",
