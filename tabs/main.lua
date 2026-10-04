@@ -267,7 +267,7 @@ local function getHead(character)
 end
 
 -- 사일런트용: 마우스(조준선)에 가장 가까운 부위, FOV 밖이면 nil
-local silentFOV = 100     -- ★ getClosestPart에서 참조하므로 미리 선언
+local silentFOV = 100
 
 local function getClosestPart(character)
     if not character then return nil end
@@ -345,7 +345,6 @@ local function createFOVCircle()
     return fovCircle
 end
 
--- ★ FOV 이내에서 가장 가까운 적 (Head 기준)
 local function getHeadTarget()
     local mousePos = UserInputService:GetMouseLocation()
     local closest, closestDist = nil, silentFOV
@@ -376,92 +375,6 @@ local function getHeadTarget()
     end
     return closest
 end
-
--- ============================================================
--- 사일런트 에임 후킹
--- ============================================================
-if not getgenv().__MinhoSilentAimHooked then
-    getgenv().__MinhoSilentAimHooked = true
-    local oldFireServer
-    if hookfunction and newcclosure then
-        oldFireServer = hookfunction(useItemRemote.FireServer, newcclosure(function(self, oid, action, cameradata, ...)
-            if silentEnabled and action == enums:ToEnum("StartShooting") then
-                if silentHitChance < 100 then
-                    if math.random(1, 100) > silentHitChance then
-                        return oldFireServer(self, oid, action, cameradata, ...)
-                    end
-                end
-
-                local target = getHeadTarget()
-                if target then
-                    -- ★ 1차 FOV 검증: 대상의 어느 파트든 FOV 안이어야 함
-                    local inFOV = false
-                    local cam = ws.CurrentCamera
-                    if cam then
-                        local mousePos = UserInputService:GetMouseLocation()
-                        for _, nm in ipairs({ "HitboxHead", "Head", "UpperTorso", "Torso", "LowerTorso", "HumanoidRootPart" }) do
-                            local p = target:FindFirstChild(nm)
-                            if p and p:IsA("BasePart") then
-                                local sp, onScreen = cam:WorldToViewportPoint(p.Position)
-                                if onScreen and sp.Z > 0 then
-                                    local d = (Vector2.new(sp.X, sp.Y) - mousePos).Magnitude
-                                    if d < silentFOV then
-                                        inFOV = true
-                                        break
-                                    end
-                                end
-                            end
-                        end
-                    end
-
-                    if inFOV then
-                        local part
-                        if silentManipulation then
-                            part = target:FindFirstChild("HitboxHead")
-                                or target:FindFirstChild("Head")
-                        elseif silentClosestPart then
-                            part = getClosestPart(target)
-                        else
-                            part = target:FindFirstChild("Head")
-                                or target:FindFirstChild("HitboxHead")
-                        end
-
-                        -- ★ 2차 FOV 재검증: 선택된 부위가 FOV 안인지
-                        if part then
-                            local cam2 = ws.CurrentCamera
-                            local okFOV = false
-                            if cam2 then
-                                local sp2, onScreen2 = cam2:WorldToViewportPoint(part.Position)
-                                if onScreen2 and sp2.Z > 0 then
-                                    local mp = UserInputService:GetMouseLocation()
-                                    local d2 = (Vector2.new(sp2.X, sp2.Y) - mp).Magnitude
-                                    if d2 < silentFOV then okFOV = true end
-                                end
-                            end
-
-                            if okFOV then
-                                local look = CFrame.new(ws.CurrentCamera.CFrame.Position, part.Position)
-                                local newData = {}
-                                newData[utf8.char(1)] = {
-                                    [utf8.char(0)] = util:EncodeCFrame(look),
-                                    [utf8.char(1)] = util:EncodeCFrame(look),
-                                    [utf8.char(2)] = part,
-                                    [utf8.char(3)] = util:EncodeCFrame(
-                                        part.CFrame:ToObjectSpace(CFrame.new(part.Position))
-                                    ),
-                                }
-                                return oldFireServer(self, oid, action, newData, ...)
-                            end
-                        end
-                    end
-                end
-            end
-            return oldFireServer(self, oid, action, cameradata, ...)
-        end))
-    end
-end
-
-_G.ToggleSilentHead = function(state) silentEnabled = state end
 
 -- ============================================================
 -- Desync
