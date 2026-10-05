@@ -18,7 +18,6 @@ local Config = {
     EvasionMode = "Random",
     NotifyEvents = true,
     HitAboveY = 0.5,
-    SpeedBoostMult = 0,
     Weapons = {
         Priority = { "Primary", "Secondary", "Melee" },
         Enabled  = { Primary = true, Secondary = true, Melee = true, Utility = false },
@@ -458,7 +457,12 @@ _G.ToggleSilentHead = function(state) silentEnabled = state end
 local Desync = { _cframe = nil, _oldCFrame = nil, _part = nil, _mode = "off" }
 local function desyncSetEnemy(cf) Desync._cframe = cf Desync._mode = "enemy" end
 local function desyncSetScatter(cf) Desync._cframe = cf Desync._mode = "scatter" end
-local function desyncClear() Desync._cframe = nil Desync._mode = "off" end
+local function desyncClear()
+    Desync._cframe = nil
+    Desync._oldCFrame = nil
+    Desync._part = nil
+    Desync._mode = "off"
+end
 local function desyncPush(root)
     if root == nil or Desync._cframe == nil then return end
     Desync._oldCFrame = root.CFrame
@@ -478,9 +482,53 @@ if not getgenv().__MinhoRageDesyncBound then
     RunService:BindToRenderStep("\0minho_rage_desync\0", Enum.RenderPriority.First.Value, desyncRestore)
 end
 
-local speedBoostOriginal = getgenv().__MinhoRageSpeedBoost or nil
-getgenv().__MinhoRageSpeedBoost = speedBoostOriginal
+-- =========================================================
+-- NoRecoil (유지)
+-- =========================================================
+local NoRecoilOriginals = getgenv().__MinhoNoRecoilOriginals or {}
+getgenv().__MinhoNoRecoilOriginals = NoRecoilOriginals
 
+local function applyNoRecoil()
+    local ok, lib = pcall(function() return require(ReplicatedStorage.Modules.ItemLibrary) end)
+    if not ok or not lib or type(lib.Items) ~= "table" then return end
+    for _, data in pairs(lib.Items) do
+        if type(data) == "table" and type(data.ShootRecoil) == "number" then
+            if NoRecoilOriginals[data] == nil then
+                NoRecoilOriginals[data] = data.ShootRecoil
+            end
+            data.ShootRecoil = 0
+        end
+    end
+    local fighter = getFighter()
+    if fighter and type(fighter.Items) == "table" then
+        for _, item in pairs(fighter.Items) do
+            local info = itemField(item, "Info")
+            if type(info) == "table" and type(info.ShootRecoil) == "number" then
+                if NoRecoilOriginals[info] == nil then
+                    NoRecoilOriginals[info] = info.ShootRecoil
+                end
+                info.ShootRecoil = 0
+            end
+        end
+    end
+end
+
+local function revertNoRecoil()
+    for data, orig in pairs(NoRecoilOriginals) do
+        if type(data) == "table" then
+            pcall(function() data.ShootRecoil = orig end)
+        end
+    end
+    NoRecoilOriginals = {}
+    getgenv().__MinhoNoRecoilOriginals = NoRecoilOriginals
+end
+
+RageModule.applyNoRecoil = applyNoRecoil
+RageModule.revertNoRecoil = revertNoRecoil
+
+-- =========================================================
+-- NoSpread (유지)
+-- =========================================================
 local NoSpreadState = {
     Hooked = false, Method = nil, Index = nil,
     Original = nil, Dummy = nil, Bindings = nil,
@@ -649,290 +697,108 @@ end
 RageModule.NoSpread_Load = NoSpread_Load
 RageModule.NoSpread_Unload = NoSpread_Unload
 
-local NoRecoilOriginals = getgenv().__MinhoNoRecoilOriginals or {}
-getgenv().__MinhoNoRecoilOriginals = NoRecoilOriginals
-
-local function applyNoRecoil()
-    local ok, lib = pcall(function() return require(ReplicatedStorage.Modules.ItemLibrary) end)
-    if not ok or not lib or type(lib.Items) ~= "table" then return end
-    for _, data in pairs(lib.Items) do
-        if type(data) == "table" and type(data.ShootRecoil) == "number" then
-            if NoRecoilOriginals[data] == nil then
-                NoRecoilOriginals[data] = data.ShootRecoil
-            end
-            data.ShootRecoil = 0
-        end
-    end
-    local fighter = getFighter()
-    if fighter and type(fighter.Items) == "table" then
-        for _, item in pairs(fighter.Items) do
-            local info = itemField(item, "Info")
-            if type(info) == "table" and type(info.ShootRecoil) == "number" then
-                if NoRecoilOriginals[info] == nil then
-                    NoRecoilOriginals[info] = info.ShootRecoil
-                end
-                info.ShootRecoil = 0
-            end
-        end
-    end
-end
-
-local function revertNoRecoil()
-    for data, orig in pairs(NoRecoilOriginals) do
-        if type(data) == "table" then
-            pcall(function() data.ShootRecoil = orig end)
-        end
-    end
-    NoRecoilOriginals = {}
-    getgenv().__MinhoNoRecoilOriginals = NoRecoilOriginals
-end
-
-RageModule.applyNoRecoil = applyNoRecoil
-RageModule.revertNoRecoil = revertNoRecoil
-
-local SPECIAL_BASE = 75
-
-local SpecialCooldownOriginals = getgenv().__MinhoSpecialCooldownOriginals or {
-    DashCooldown        = {},
-    SpinCooldown        = {},
-    DeflectCooldown     = {},
-    HeavyAttackCooldown = {},
-    AttackCooldown      = {},
-    ShootCooldown       = {},
+-- =========================================================
+-- Attack Speed (Remote Only) - 신규
+-- =========================================================
+local AttackSpeed = {
+    Enabled = false,
+    Interval = 0.05,
+    LastSent = 0,
+    LastOid = nil,
+    LastAction = nil,
+    LastData = nil,
+    LastExtra = nil,
+    ExpireAt = 0,
 }
-getgenv().__MinhoSpecialCooldownOriginals = SpecialCooldownOriginals
 
+local attackSpeedRemote = ReplicatedStorage.Remotes.Replication.Fighter.UseItem
+local attackSpeedEnums  = require(ReplicatedStorage.Modules.EnumLibrary)
+
+local function enumToName(enum)
+    local ok, name = pcall(function() return attackSpeedEnums:FromEnum(enum) end)
+    if ok and type(name) == "string" then return name end
+
+    ok, name = pcall(function() return attackSpeedEnums:GetEnum(enum) end)
+    if ok and type(name) == "string" then return name end
+
+    if type(attackSpeedEnums) == "table" then
+        for k, v in pairs(attackSpeedEnums) do
+            if type(v) == "table" then
+                for kk, vv in pairs(v) do
+                    if vv == enum then return kk end
+                end
+            end
+        end
+    end
+    return nil
+end
+
+local ATTACK_ENUM_NAMES = {
+    StartShooting = true,
+    StartAttacking = true,
+    StartMelee = true,
+    Attack = true,
+    Shoot = true,
+}
+
+if not getgenv().__MinhoAttackSpeedHooked then
+    getgenv().__MinhoAttackSpeedHooked = true
+    local oldFire
+    oldFire = hookfunction(attackSpeedRemote.FireServer, newcclosure(function(self, oid, action, data, ...)
+        if AttackSpeed.Enabled then
+            local name = enumToName(action)
+            if name and ATTACK_ENUM_NAMES[name] then
+                AttackSpeed.LastOid    = oid
+                AttackSpeed.LastAction = action
+                AttackSpeed.LastData   = data
+                AttackSpeed.LastExtra  = { ... }
+                AttackSpeed.ExpireAt   = os.clock() + 0.5
+            end
+        end
+        return oldFire(self, oid, action, data, ...)
+    end))
+end
+
+RunService.Heartbeat:Connect(function()
+    if not AttackSpeed.Enabled then return end
+    if not AttackSpeed.LastOid then return end
+
+    local now = os.clock()
+    if now > AttackSpeed.ExpireAt then
+        AttackSpeed.LastOid = nil
+        return
+    end
+    if now - AttackSpeed.LastSent < AttackSpeed.Interval then return end
+    AttackSpeed.LastSent = now
+
+    local extra = AttackSpeed.LastExtra or {}
+    pcall(function()
+        attackSpeedRemote:FireServer(
+            AttackSpeed.LastOid,
+            AttackSpeed.LastAction,
+            AttackSpeed.LastData,
+            table.unpack(extra)
+        )
+    end)
+end)
+
+RageModule.setAttackSpeed = function(enabled, interval)
+    AttackSpeed.Enabled = enabled and true or false
+    if interval and interval > 0 then AttackSpeed.Interval = interval end
+    if not AttackSpeed.Enabled then AttackSpeed.LastOid = nil end
+end
+
+-- =========================================================
+-- Helper toggles
+-- =========================================================
 local function safeToggle(id)
     local t = Toggles and Toggles[id]
     return t ~= nil and t.Value == true
 end
-local function safeOption(id, default)
-    local o = Options and Options[id]
-    if o == nil or o.Value == nil then return default end
-    return o.Value
-end
 
-local function applySpecialCooldowns()
-    local ok, lib = pcall(function() return require(ReplicatedStorage.Modules.ItemLibrary) end)
-    if not ok or not lib or type(lib.Items) ~= 'table' then return end
-
-    local scytheOn  = safeToggle("ScytheDashToggle")
-    local scytheVal = safeOption("ScytheDashSlider", SPECIAL_BASE)
-    local axeOn     = safeToggle("AxeSpinToggle")
-    local axeVal    = safeOption("AxeSpinSlider", SPECIAL_BASE)
-    local katanaOn  = safeToggle("KatanaDeflectToggle")
-    local katanaVal = safeOption("KatanaDeflectSlider", SPECIAL_BASE)
-    local knifeOn   = safeToggle("KnifeHeavyToggle")
-    local knifeVal  = safeOption("KnifeHeavySlider", SPECIAL_BASE)
-    local gunOn     = safeToggle("FireCooldownEnabled")
-    local gunVal    = safeOption("FireCooldownSlider", SPECIAL_BASE)
-    local meleeOn   = safeToggle("MeleeCooldownEnabled")
-    local meleeVal  = safeOption("MeleeCooldownSlider", SPECIAL_BASE)
-
-    local GUN_MIN = 0.02
-    local MELEE_MIN = 0.02
-
-    for _, data in pairs(lib.Items) do
-        if type(data) == 'table' then
-            if type(data.DashCooldown) == 'number' then
-                if SpecialCooldownOriginals.DashCooldown[data] == nil then
-                    SpecialCooldownOriginals.DashCooldown[data] = data.DashCooldown
-                end
-                if scytheOn then
-                    data.DashCooldown = math.max(0.001, SpecialCooldownOriginals.DashCooldown[data] * (scytheVal / SPECIAL_BASE))
-                else
-                    data.DashCooldown = SpecialCooldownOriginals.DashCooldown[data]
-                end
-            end
-            if type(data.SpinCooldown) == 'number' then
-                if SpecialCooldownOriginals.SpinCooldown[data] == nil then
-                    SpecialCooldownOriginals.SpinCooldown[data] = data.SpinCooldown
-                end
-                if axeOn then
-                    data.SpinCooldown = math.max(0.001, SpecialCooldownOriginals.SpinCooldown[data] * (axeVal / SPECIAL_BASE))
-                else
-                    data.SpinCooldown = SpecialCooldownOriginals.SpinCooldown[data]
-                end
-            end
-            if type(data.DeflectCooldown) == 'number' then
-                if SpecialCooldownOriginals.DeflectCooldown[data] == nil then
-                    SpecialCooldownOriginals.DeflectCooldown[data] = data.DeflectCooldown
-                end
-                if katanaOn then
-                    data.DeflectCooldown = math.max(0.001, SpecialCooldownOriginals.DeflectCooldown[data] * (katanaVal / SPECIAL_BASE))
-                else
-                    data.DeflectCooldown = SpecialCooldownOriginals.DeflectCooldown[data]
-                end
-            end
-            if type(data.HeavyAttackCooldown) == 'number' then
-                if SpecialCooldownOriginals.HeavyAttackCooldown[data] == nil then
-                    SpecialCooldownOriginals.HeavyAttackCooldown[data] = data.HeavyAttackCooldown
-                end
-                if knifeOn then
-                    data.HeavyAttackCooldown = math.max(0.001, SpecialCooldownOriginals.HeavyAttackCooldown[data] * (knifeVal / SPECIAL_BASE))
-                else
-                    data.HeavyAttackCooldown = SpecialCooldownOriginals.HeavyAttackCooldown[data]
-                end
-            end
-            if type(data.ShootCooldown) == 'number' then
-                if SpecialCooldownOriginals.ShootCooldown[data] == nil then
-                    SpecialCooldownOriginals.ShootCooldown[data] = data.ShootCooldown
-                end
-                if gunOn then
-                    local newVal = SpecialCooldownOriginals.ShootCooldown[data] * (gunVal / SPECIAL_BASE)
-                    data.ShootCooldown = math.max(GUN_MIN, newVal)
-                else
-                    data.ShootCooldown = SpecialCooldownOriginals.ShootCooldown[data]
-                end
-            end
-            if type(data.AttackCooldown) == 'number' then
-                if SpecialCooldownOriginals.AttackCooldown[data] == nil then
-                    SpecialCooldownOriginals.AttackCooldown[data] = data.AttackCooldown
-                end
-                if meleeOn then
-                    local newVal = SpecialCooldownOriginals.AttackCooldown[data] * (meleeVal / SPECIAL_BASE)
-                    data.AttackCooldown = math.max(MELEE_MIN, newVal)
-                else
-                    data.AttackCooldown = SpecialCooldownOriginals.AttackCooldown[data]
-                end
-            end
-        end
-    end
-
-    local fighter = getFighter()
-    if fighter and type(fighter.Items) == 'table' then
-        for _, item in pairs(fighter.Items) do
-            local info = itemField(item, "Info")
-            if type(info) == 'table' then
-                if scytheOn and type(info.DashCooldown) == 'number' and SpecialCooldownOriginals.DashCooldown[info] then
-                    info.DashCooldown = math.max(0.001, SpecialCooldownOriginals.DashCooldown[info] * (scytheVal / SPECIAL_BASE))
-                end
-                if axeOn and type(info.SpinCooldown) == 'number' and SpecialCooldownOriginals.SpinCooldown[info] then
-                    info.SpinCooldown = math.max(0.001, SpecialCooldownOriginals.SpinCooldown[info] * (axeVal / SPECIAL_BASE))
-                end
-                if katanaOn and type(info.DeflectCooldown) == 'number' and SpecialCooldownOriginals.DeflectCooldown[info] then
-                    info.DeflectCooldown = math.max(0.001, SpecialCooldownOriginals.DeflectCooldown[info] * (katanaVal / SPECIAL_BASE))
-                end
-                if knifeOn and type(info.HeavyAttackCooldown) == 'number' and SpecialCooldownOriginals.HeavyAttackCooldown[info] then
-                    info.HeavyAttackCooldown = math.max(0.001, SpecialCooldownOriginals.HeavyAttackCooldown[info] * (knifeVal / SPECIAL_BASE))
-                end
-                if gunOn and type(info.ShootCooldown) == 'number' and SpecialCooldownOriginals.ShootCooldown[info] then
-                    local newVal = SpecialCooldownOriginals.ShootCooldown[info] * (gunVal / SPECIAL_BASE)
-                    info.ShootCooldown = math.max(GUN_MIN, newVal)
-                end
-                if meleeOn and type(info.AttackCooldown) == 'number' and SpecialCooldownOriginals.AttackCooldown[info] then
-                    local newVal = SpecialCooldownOriginals.AttackCooldown[info] * (meleeVal / SPECIAL_BASE)
-                    info.AttackCooldown = math.max(MELEE_MIN, newVal)
-                end
-            end
-        end
-    end
-end
-
-RageModule.applySpecialCooldowns = applySpecialCooldowns
-
-local function applySpeedBoost()
-    if speedBoostOriginal ~= nil then return end
-    local ok, lib = pcall(function() return require(ReplicatedStorage.Modules.ItemLibrary) end)
-    if not ok or not lib or not lib.Items then return end
-    speedBoostOriginal = {}
-    local FIELDS = {
-        "ShootCooldown", "ShootBurstCooldown", "ShootRecoil", "ShootSpread",
-        "AttackCooldown", "AttackDelay", "SwingCooldown", "MeleeCooldown",
-        "Cooldown", "RecoveryTime", "ResetTime", "SwingTime", "SwingDelay",
-        "ComboCooldown", "FireCooldown", "ReloadLength",
-    }
-    local mult = Config.SpeedBoostMult
-    for name, data in pairs(lib.Items) do
-        if type(data) == "table" then
-            local orig = {}
-            for _, f in ipairs(FIELDS) do
-                if data[f] ~= nil then
-                    orig[f] = data[f]
-                    if type(data[f]) == "number" then
-                        data[f] = data[f] * mult
-                    end
-                end
-            end
-            if next(orig) ~= nil then speedBoostOriginal[name] = orig end
-        end
-    end
-    if next(speedBoostOriginal) == nil then speedBoostOriginal = nil end
-    getgenv().__MinhoRageSpeedBoost = speedBoostOriginal
-end
-local function removeSpeedBoost()
-    if speedBoostOriginal == nil then return end
-    local ok, lib = pcall(function() return require(ReplicatedStorage.Modules.ItemLibrary) end)
-    if ok and lib and lib.Items then
-        for name, orig in pairs(speedBoostOriginal) do
-            local data = lib.Items[name]
-            if type(data) == "table" then
-                for f, base in pairs(orig) do data[f] = base end
-            end
-        end
-    end
-    speedBoostOriginal = nil
-    getgenv().__MinhoRageSpeedBoost = nil
-end
-RageModule.applySpeedBoost = applySpeedBoost
-RageModule.removeSpeedBoost = removeSpeedBoost
-
-local function doFire(part)
-    local fighter = getFighter()
-    local item = fighter and fighter.EquippedItem
-    if not item or not part then return false end
-    local cam = ws.CurrentCamera
-    local fromPos = (Desync._mode == "enemy" and Desync._cframe and Desync._cframe.Position)
-        or (cam and cam.CFrame.Position) or part.Position
-    local look = CFrame.new(fromPos, part.Position)
-    local data = {
-        [utf8.char(0)] = util:EncodeCFrame(look),
-        [utf8.char(1)] = util:EncodeCFrame(look),
-        [utf8.char(2)] = part,
-        [utf8.char(3)] = util:EncodeCFrame(part.CFrame:ToObjectSpace(CFrame.new(part.Position))),
-    }
-    local oid = item:Get("ObjectID")
-    local shootEnum = enums:ToEnum("StartShooting")
-    if not (oid and shootEnum) then return false end
-    return (pcall(function()
-        useItemRemote:FireServer(oid, shootEnum, { [utf8.char(1)] = data }, nil)
-    end))
-end
-
-local function doReload(item)
-    item = item or getEquippedItem()
-    if not item or isMelee(item) then return end
-    pcall(function() item:StartReloading() end)
-end
-
-local function getClosestEnemy()
-    local root = getRoot()
-    if not root then return nil end
-    local myEnv = LocalPlayer:GetAttribute("EnvironmentID")
-    local myTeam = LocalPlayer:GetAttribute("TeamID")
-    local best, bestDist = nil, math.huge
-    local myPos = (Desync._oldCFrame or root.CFrame).Position
-    for _, plr in ipairs(Players:GetPlayers()) do
-        if plr ~= LocalPlayer and plr.Character then
-            local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-            local head = getHead(plr.Character)
-            if hum and hum.Health > 0 and head and not isInvincible(plr.Character) then
-                local env = plr:GetAttribute("EnvironmentID")
-                local team = plr:GetAttribute("TeamID")
-                local envOk = (myEnv == nil) or (env == myEnv)
-                local teamOk = (myTeam == nil) or (team == nil) or (team ~= myTeam)
-                if envOk and teamOk then
-                    local d = (head.Position - myPos).Magnitude
-                    if d < bestDist then
-                        best, bestDist = { Head = head, Character = plr.Character }, d
-                    end
-                end
-            end
-        end
-    end
-    return best
-end
-
+-- =========================================================
+-- AutoPickup
+-- =========================================================
 RunService.Heartbeat:Connect(function()
     if not Config.AutoPickup.Enabled then return end
     if not firetouchinterest then return end
@@ -967,6 +833,9 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
+-- =========================================================
+-- UE Assisted Rage
+-- =========================================================
 local lastEscapeAt, lastAttachAt, lastMeleeAt = 0, 0, 0
 local lastTarget = nil
 
@@ -1047,6 +916,9 @@ RunService.Heartbeat:Connect(function()
     end)
 end)
 
+-- =========================================================
+-- Underground
+-- =========================================================
 local undergroundState = getgenv().__MinhoUndergroundState or {
     Active = false, Conn = nil, NoclipConn = nil, GroundY = nil,
 }
@@ -1145,21 +1017,20 @@ LocalPlayer.CharacterAdded:Connect(function()
     end
 end)
 
+-- =========================================================
+-- Main Rage Heartbeat
+-- =========================================================
 if RageModule._heartbeatConn then
     pcall(function() RageModule._heartbeatConn:Disconnect() end)
 end
 
 RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
     if not Config.Enabled then
-        if speedBoostOriginal then removeSpeedBoost() end
         desyncClear()
         return
     end
 
-    if speedBoostOriginal == nil then applySpeedBoost() end
-
-    pcall(applySpecialCooldowns)
-
+    -- NoRecoil 만 유지 (스피드핵 없음)
     if safeToggle("NoRecoilEnabled") then
         pcall(applyNoRecoil)
     end
@@ -1321,6 +1192,9 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
     end
 end)
 
+-- =========================================================
+-- FOV Circle Render
+-- =========================================================
 RunService.RenderStepped:Connect(function()
     if not silentShowFOV then
         if fovCircle then fovCircle.Visible = false end
@@ -1337,6 +1211,9 @@ RunService.RenderStepped:Connect(function()
     c.Visible = true
 end)
 
+-- =========================================================
+-- UI
+-- =========================================================
 local RageBox  = Main:AddGroupbox({ Name = "Ragebot", Side = 1, IconName = "target" })
 local RBox     = Main:AddGroupbox({ Name = "Rage", Side = 1, IconName = "zap" })
 
@@ -1469,6 +1346,7 @@ SABox:AddSlider("SilentAim_HitChance", {
     end,
 })
 
+-- No Recoil / No Spread 유지
 SCBox:AddCheckbox("NoRecoilEnabled", {
     Text = "No Recoil",
     Default = false,
@@ -1504,112 +1382,26 @@ SCBox:AddCheckbox("NoSpread", {
     end,
 })
 
-SCBox:AddCheckbox("FireCooldownEnabled", {
-    Text = "Fire Cooldown (Guns)",
+-- Attack Speed (Remote Only) — 신규
+SCBox:AddCheckbox("AttackSpeedEnabled", {
+    Text = "Attack Speed (Remote Only)",
     Default = false,
-    Tooltip = "Controls all gun fire rate. Slider 75 = original, 0 = fastest (safe floor 0.02s).",
-    Callback = function()
-        if RageModule.applySpecialCooldowns then RageModule.applySpecialCooldowns() end
+    Tooltip = "서버로 보내는 공격 리모트만 빨라짐. 뷰모델/애니메이션은 정상.",
+    Callback = function(v)
+        RageModule.setAttackSpeed(v, AttackSpeed.Interval)
     end,
 })
-local FireCooldownBox = SCBox:AddDependencyBox()
-FireCooldownBox:AddSlider("FireCooldownSlider", {
-    Default = 75, Min = 0, Max = 100, Rounding = 0, Compact = true,
-    Callback = function()
-        if RageModule.applySpecialCooldowns then RageModule.applySpecialCooldowns() end
-    end,
-})
-FireCooldownBox:SetupDependencies({ { Toggles.FireCooldownEnabled, true } })
 
-SCBox:AddCheckbox("MeleeCooldownEnabled", {
-    Text = "Melee Cooldown (Melee)",
-    Default = false,
-    Tooltip = "Controls all melee attack speed. Slider 75 = original, 0 = fastest (safe floor 0.02s).",
-    Callback = function()
-        if RageModule.applySpecialCooldowns then RageModule.applySpecialCooldowns() end
+local ASBox = SCBox:AddDependencyBox()
+ASBox:AddSlider("AttackSpeedInterval", {
+    Text = "Interval",
+    Default = 0.05, Min = 0.01, Max = 0.5,
+    Rounding = 3, Compact = true,
+    Suffix = "s",
+    Callback = function(v)
+        AttackSpeed.Interval = v
     end,
 })
-local MeleeCooldownBox = SCBox:AddDependencyBox()
-MeleeCooldownBox:AddSlider("MeleeCooldownSlider", {
-    Default = 75, Min = 0, Max = 100, Rounding = 0, Compact = true,
-    Callback = function()
-        if RageModule.applySpecialCooldowns then RageModule.applySpecialCooldowns() end
-    end,
-})
-MeleeCooldownBox:SetupDependencies({ { Toggles.MeleeCooldownEnabled, true } })
-
-SCBox:AddCheckbox("ScytheDashToggle", {
-    Text = "Scythe Dash",
-    Default = false,
-    Tooltip = "Controls Scythe dash cooldown. Slider 75 = original, 0 = instant.",
-    Callback = function()
-        if RageModule.applySpecialCooldowns then RageModule.applySpecialCooldowns() end
-    end,
-})
-local ScytheDashBox = SCBox:AddDependencyBox()
-ScytheDashBox:AddSlider("ScytheDashSlider", {
-    Default = 75, Min = 0, Max = 100, Rounding = 0, Compact = true,
-    Callback = function()
-        if RageModule.applySpecialCooldowns then RageModule.applySpecialCooldowns() end
-    end,
-})
-ScytheDashBox:SetupDependencies({ { Toggles.ScytheDashToggle, true } })
-
-SCBox:AddCheckbox("AxeSpinToggle", {
-    Text = "Battle Axe Dash",
-    Default = false,
-    Tooltip = "Controls Battle Axe spin cooldown. Slider 75 = original, 0 = instant.",
-    Callback = function()
-        if RageModule.applySpecialCooldowns then RageModule.applySpecialCooldowns() end
-    end,
-})
-local AxeSpinBox = SCBox:AddDependencyBox()
-AxeSpinBox:AddSlider("AxeSpinSlider", {
-    Default = 75, Min = 0, Max = 100, Rounding = 0, Compact = true,
-    Callback = function()
-        if RageModule.applySpecialCooldowns then RageModule.applySpecialCooldowns() end
-    end,
-})
-AxeSpinBox:SetupDependencies({ { Toggles.AxeSpinToggle, true } })
-
-SCBox:AddCheckbox("KatanaDeflectToggle", {
-    Text = "Katana Deflect",
-    Default = false,
-    Tooltip = "Controls Katana deflect cooldown. Slider 75 = original, 0 = instant.",
-    Callback = function()
-        if RageModule.applySpecialCooldowns then RageModule.applySpecialCooldowns() end
-    end,
-})
-local KatanaDeflectBox = SCBox:AddDependencyBox()
-KatanaDeflectBox:AddSlider("KatanaDeflectSlider", {
-    Default = 75, Min = 0, Max = 100, Rounding = 0, Compact = true,
-    Callback = function()
-        if RageModule.applySpecialCooldowns then RageModule.applySpecialCooldowns() end
-    end,
-})
-KatanaDeflectBox:SetupDependencies({ { Toggles.KatanaDeflectToggle, true } })
-
-SCBox:AddCheckbox("KnifeHeavyToggle", {
-    Text = "Knife Heavy Attack",
-    Default = false,
-    Tooltip = "Controls Knife heavy attack cooldown. Slider 75 = original, 0 = instant.",
-    Callback = function()
-        if RageModule.applySpecialCooldowns then RageModule.applySpecialCooldowns() end
-    end,
-})
-local KnifeHeavyBox = SCBox:AddDependencyBox()
-KnifeHeavyBox:AddSlider("KnifeHeavySlider", {
-    Default = 75, Min = 0, Max = 100, Rounding = 0, Compact = true,
-    Callback = function()
-        if RageModule.applySpecialCooldowns then RageModule.applySpecialCooldowns() end
-    end,
-})
-KnifeHeavyBox:SetupDependencies({ { Toggles.KnifeHeavyToggle, true } })
-
-task.defer(function()
-    if RageModule.applySpecialCooldowns then
-        pcall(RageModule.applySpecialCooldowns)
-    end
-end)
+ASBox:SetupDependencies({ { Toggles.AttackSpeedEnabled, true } })
 
 return nil
