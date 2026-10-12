@@ -109,13 +109,21 @@ local function getExpectedAmmo(item)
     end
     return getGunAmmo(item)
 end
-local function isMagFull(item)
-    if not item then return true end
-    local data = itemField(item, "Data")
-    local ammo = itemField(data, "Ammo")
+local function getMaxAmmo(item)
+    if not item then return nil end
     local info = itemField(item, "Info")
     local maxAmmo = itemField(info, "MaxAmmo")
-    if ammo == nil or maxAmmo == nil then return false end
+    if maxAmmo ~= nil then return maxAmmo end
+    local inner = itemField(item, "Inner")
+    local innerInfo = itemField(inner, "Info")
+    return itemField(innerInfo, "MaxAmmo")
+end
+local function isMagFull(item)
+    if not item then return true end
+    local ammo = getGunAmmo(item)
+    local maxAmmo = getMaxAmmo(item)
+    if ammo == nil then return true end
+    if maxAmmo == nil then return false end
     return ammo >= maxAmmo
 end
 
@@ -1292,6 +1300,16 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
     if action.type == "Reload" then
         local gun = action.item
 
+        if isMagFull(gun) then
+            clearReloadTransport()
+            if evasionOn then
+                scatterStep(root, now)
+            else
+                desyncClear()
+            end
+            return
+        end
+
         if ReloadTransport.gun == nil then
             ReloadTransport.gun = gun
             ReloadTransport.readyAt = nil
@@ -1307,17 +1325,12 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
 
         if evasionOn then
             local name = scatterStep(root, now)
-            if now - lastEscapeAt > 1 then
+            if now - lastEscapeAt > 1.5 then
                 lastEscapeAt = now
                 notify("Out of ammo -> escaping " .. name, 1.5)
             end
         else
             desyncClear()
-        end
-
-        if isMagFull(gun) then
-            clearReloadTransport()
-            return
         end
 
         local ammo = getGunAmmo(gun)
@@ -1359,10 +1372,12 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
                 ReloadTransport.ackDeadline = os.clock()
                     + getEstimatedRemoteDelay()
                     + getEstimatedReplicationDelay()
-                if now - lastEscapeAt > 1 then
+                if now - lastEscapeAt > 1.5 then
                     lastEscapeAt = now
                     notify("Full reload sent", 1.5)
                 end
+            else
+                clearReloadTransport()
             end
         end
         return
