@@ -1054,12 +1054,7 @@ local lastEscapeAt, lastAttachAt, lastMeleeAt = 0, 0, 0
 local lastTarget = nil
 
 local function notify(text, dur)
-    if not Config.NotifyEvents then return end
-    pcall(function()
-        if Library and Library.Notify then
-            Library:Notify({ Title = "Ragebot", Description = tostring(text), Duration = dur or 3 })
-        end
-    end)
+    return
 end
 
 local meleeCount = 0
@@ -1516,7 +1511,6 @@ end)
 local RageBox  = Main:AddGroupbox({ Name = "Ragebot", Side = 1, IconName = "target" })
 local RBox     = Main:AddGroupbox({ Name = "Rage", Side = 1, IconName = "zap" })
 
-local SABox    = Main:AddGroupbox({ Name = "Silent Aim", Side = 2, IconName = "focus" })
 local SCBox    = Main:AddGroupbox({ Name = "Speed Control", Side = 2, IconName = "gauge" })
 
 RageBox:AddCheckbox("RageEnabled", {
@@ -1568,80 +1562,6 @@ RBox:AddCheckbox("Underground", {
     Text = "Underground", Default = false,
     Callback = function(Value)
         if Value then startUnderground() else stopUnderground() end
-    end,
-})
-
-SABox:AddCheckbox("SilentAim_Enabled", {
-    Text = "Enabled", Default = true,
-    Callback = function(v)
-        silentEnabled = v
-        Config.SilentAim.Enabled = v
-    end,
-})
-
-SABox:AddCheckbox("SilentAim_Manipulation", {
-    Text = "Manipulation", Default = false,
-    Callback = function(v)
-        silentManipulation = v
-        Config.SilentAim.Manipulation = v
-        if v and silentClosestPart then
-            silentClosestPart = false
-            Config.SilentAim.ClosestPart = false
-            pcall(function()
-                if Toggles["SilentAim_ClosestPart"] then
-                    Toggles["SilentAim_ClosestPart"]:SetValue(false)
-                end
-            end)
-        end
-    end,
-})
-
-SABox:AddCheckbox("SilentAim_ClosestPart", {
-    Text = "Closest Part", Default = false,
-    Callback = function(v)
-        silentClosestPart = v
-        Config.SilentAim.ClosestPart = v
-        if v and silentManipulation then
-            silentManipulation = false
-            Config.SilentAim.Manipulation = false
-            pcall(function()
-                if Toggles["SilentAim_Manipulation"] then
-                    Toggles["SilentAim_Manipulation"]:SetValue(false)
-                end
-            end)
-        end
-    end,
-})
-
-SABox:AddCheckbox("SilentAim_ShowFOV", {
-    Text = "Show FOV", Default = false,
-    Callback = function(v)
-        silentShowFOV = v
-        Config.SilentAim.ShowFOV = v
-        if not v and fovCircle then fovCircle.Visible = false end
-    end,
-})
-SABox:AddSlider("SilentAim_Radius", {
-    Text = "Radius",
-    Default = 100, Min = 5, Max = 2000,
-    Rounding = 0,
-    Suffix = " studs",
-    Callback = function(v)
-        v = math.floor(v / 5 + 0.5) * 5
-        silentFOV = v
-        Config.SilentAim.Radius = v
-        if fovCircle then fovCircle.Radius = v end
-    end,
-})
-SABox:AddSlider("SilentAim_HitChance", {
-    Text = "Hit Chance",
-    Default = 100, Min = 1, Max = 100,
-    Rounding = 0,
-    Suffix = "%",
-    Callback = function(v)
-        v = math.floor(v + 0.5)
-        silentHitChance = v
-        Config.SilentAim.HitChance = v
     end,
 })
 
