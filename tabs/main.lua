@@ -54,10 +54,60 @@ local function cycleEscape()
     return DIRECTIONS[escapeIndex], DIR_NAMES[escapeIndex]
 end
 
+local function getOneWayPing()
+    return 0.5 * LocalPlayer:GetNetworkPing()
+end
+local function getEstimatedReplicationDelay()
+    return getOneWayPing() + 0.05
+end
+local function getEstimatedRemoteDelay()
+    return getOneWayPing() + 0.016666666666666666
+end
+
+local ReloadTransport = {
+    gun = nil,
+    readyAt = nil,
+    pendingAmmo = nil,
+    ackDeadline = nil,
+    lastShotCount = 0,
+}
+
+local function clearReloadTransport()
+    ReloadTransport.gun = nil
+    ReloadTransport.readyAt = nil
+    ReloadTransport.pendingAmmo = nil
+    ReloadTransport.ackDeadline = nil
+    ReloadTransport.lastShotCount = 0
+end
+
 local function itemField(obj, key)
     if obj == nil then return nil end
     local ok, v = pcall(function() return obj[key] end)
     return ok and v or nil
+end
+
+local function getGunAmmo(item)
+    local data = itemField(item, "Data")
+    return itemField(data, "Ammo")
+end
+local function getGunReserve(item)
+    local data = itemField(item, "Data")
+    local r = itemField(data, "AmmoReserve")
+    if r == nil then return math.huge end
+    return r
+end
+local function getShotRequestCount(item)
+    local n = itemField(item, "ShotRequestCount")
+    if type(n) == "number" then return n end
+    return 0
+end
+local function getExpectedAmmo(item)
+    local fn = itemField(item, "GetExpectedAmmoAfterPendingShots")
+    if type(fn) == "function" then
+        local ok, v = pcall(function() return item:GetExpectedAmmoAfterPendingShots() end)
+        if ok then return v end
+    end
+    return getGunAmmo(item)
 end
 
 local function getRoot()
@@ -909,8 +959,9 @@ end
 
 local function doReload(item)
     item = item or getEquippedItem()
-    if not item or isMelee(item) then return end
-    pcall(function() item:StartReloading() end)
+    if not item or isMelee(item) then return false end
+    local ok = pcall(function() item:StartReloading() end)
+    return ok
 end
 
 local function getClosestEnemy()
@@ -1160,6 +1211,7 @@ end
 RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
     if not Config.Enabled then
         if speedBoostOriginal then removeSpeedBoost() end
+        clearReloadTransport()
         desyncClear()
         return
     end
@@ -1193,6 +1245,7 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
 
     local action = weaponAction()
     if action == nil then
+        clearReloadTransport()
         if evasionOn then
             scatterStep(root, now)
         else
@@ -1202,6 +1255,7 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
     end
 
     if action.type == "Swap" then
+        clearReloadTransport()
         if evasionOn then
             scatterStep(root, now)
         else
@@ -1220,13 +1274,83 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
     end
 
     if action.type == "Reload" then
-        if not isReloading(action.item) then doReload(action.item) end
-        if evasionOn then
-            local name = scatterStep(root, now)
-            if now - lastEscapeAt > 1 then
-                lastEscapeAt = now
-                notify("Out of ammo -> reload + escape " .. name, 1.5)
+        local gun = action.item
+
+        if ReloadTransport.gun == nil then
+            ReloadTransport.gun = gun
+            ReloadTransport.readyAt = nil
+            ReloadTransport.pendingAmmo = nil
+            ReloadTransport.ackDeadline = nil
+            ReloadTransport.lastShotCount = getShotRequestCount(gun)
+        end
+
+        if currentItem ~= ReloadTransport.gun then
+            clearReloadTransport()
+            return
+        end
+
+        local ammo = getGunAmmo(gun)
+        local reserve = getGunReserve(gun)
+
+        if isReloading(gun) then
+            ReloadTransport.readyAt = nil
+            ReloadTransport.pendingAmmo = nil
+            ReloadTransport.ackDeadline = nil
+            if evasionOn then
+                local name = scatterStep(root, now)
+                if now - lastEscapeAt > 1 then
+                    lastEscapeAt = now
+                    notify("Reloading...", 1.5)
+                end
+            else
+                desyncClear()
             end
+            return
+        end
+
+        if ReloadTransport.pendingAmmo ~= nil then
+            if not (ammo <= 0 and reserve > 0) then
+                local deadlinePassed = ReloadTransport.ackDeadline == nil
+                    or now >= ReloadTransport.ackDeadline
+                if deadlinePassed then
+                    clearReloadTransport()
+                    return
+                end
+                if evasionOn then
+                    scatterStep(root, now)
+                else
+                    desyncClear()
+                end
+                return
+            end
+            ReloadTransport.pendingAmmo = nil
+            ReloadTransport.ackDeadline = nil
+        end
+
+        if ammo > 0 or reserve <= 0 then
+            clearReloadTransport()
+            return
+        end
+
+        if ReloadTransport.readyAt == nil then
+            ReloadTransport.readyAt = now + getEstimatedReplicationDelay()
+        end
+
+        if now >= ReloadTransport.readyAt
+            and (ReloadTransport.ackDeadline == nil or now >= ReloadTransport.ackDeadline) then
+            if doReload(gun) then
+                ReloadTransport.ackDeadline = os.clock()
+                    + getEstimatedRemoteDelay()
+                    + getEstimatedReplicationDelay()
+                if now - lastEscapeAt > 1 then
+                    lastEscapeAt = now
+                    notify("Reload sent", 1.5)
+                end
+            end
+        end
+
+        if evasionOn then
+            scatterStep(root, now)
         else
             desyncClear()
         end
@@ -1234,12 +1358,13 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
     end
 
     if action.type == "Utility" then
+        clearReloadTransport()
         if evasionOn then
             local name = scatterStep(root, now)
             if now - lastEscapeAt > 2 then
                 lastEscapeAt = now
                 local utilName = rawget(action.item, "Name") or "?"
-                notify("Utility (" .. utilName .. ") -> escape " .. name, 2)
+                notify("Utility (" .. utilName .. ")", 2)
             end
         else
             desyncClear()
@@ -1250,6 +1375,7 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
 
     local enemy = getClosestEnemy()
     if not enemy then
+        clearReloadTransport()
         if evasionOn then
             scatterStep(root, now)
         else
@@ -1262,6 +1388,7 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
     local targetChar = enemy.Character
     local head = enemy.Head
     if not targetChar or not head or isDead(targetChar) then
+        clearReloadTransport()
         if evasionOn then
             scatterStep(root, now)
         else
@@ -1291,11 +1418,12 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
         local targetAlive = targetHum and targetHum.Health > 0 and not isDead(targetChar)
 
         if not targetAlive then
+            clearReloadTransport()
             if evasionOn then
                 local name = scatterStep(root, now)
                 if now - lastEscapeAt > 0.5 then
                     lastEscapeAt = now
-                    notify("Melee kill -> escape " .. name, 2)
+                    notify("Melee kill", 2)
                 end
             else
                 desyncClear()
@@ -1325,6 +1453,20 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
         if now - lastAttachAt > 1 then
             lastAttachAt = now
             notify("Attach -> fire (Head)", 1)
+        end
+
+        local curGun = currentItem
+        if curGun and itemType(curGun) == "Gun" then
+            local after = getExpectedAmmo(curGun)
+            if after ~= nil and after <= 0 and getGunReserve(curGun) > 0 then
+                local nowA = os.clock()
+                ReloadTransport.gun = curGun
+                ReloadTransport.readyAt = nowA + getEstimatedReplicationDelay()
+                ReloadTransport.pendingAmmo = getGunAmmo(curGun) or 0
+                ReloadTransport.ackDeadline = nowA
+                    + getEstimatedRemoteDelay()
+                    + getEstimatedReplicationDelay()
+            end
         end
     end
 end)
