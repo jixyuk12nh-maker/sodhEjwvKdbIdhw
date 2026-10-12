@@ -109,6 +109,15 @@ local function getExpectedAmmo(item)
     end
     return getGunAmmo(item)
 end
+local function isMagFull(item)
+    if not item then return true end
+    local data = itemField(item, "Data")
+    local ammo = itemField(data, "Ammo")
+    local info = itemField(item, "Info")
+    local maxAmmo = itemField(info, "MaxAmmo")
+    if ammo == nil or maxAmmo == nil then return false end
+    return ammo >= maxAmmo
+end
 
 local function getRoot()
     local c = LocalPlayer.Character
@@ -957,11 +966,18 @@ local function doFire(part)
     end))
 end
 
-local function doReload(item)
+local function doFullReload(item)
     item = item or getEquippedItem()
     if not item or isMelee(item) then return false end
-    local ok = pcall(function() item:StartReloading() end)
-    return ok
+    if isMagFull(item) then return false end
+    local ok, rl = pcall(function() return item:IsReloading() end)
+    if ok and rl then return false end
+
+    local data = itemField(item, "Data")
+    local reserve = itemField(data, "AmmoReserve")
+    if reserve ~= nil and reserve <= 0 then return false end
+
+    return (pcall(function() item:StartReloading() end))
 end
 
 local function getClosestEnemy()
@@ -1289,6 +1305,21 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
             return
         end
 
+        if evasionOn then
+            local name = scatterStep(root, now)
+            if now - lastEscapeAt > 1 then
+                lastEscapeAt = now
+                notify("Out of ammo -> escaping " .. name, 1.5)
+            end
+        else
+            desyncClear()
+        end
+
+        if isMagFull(gun) then
+            clearReloadTransport()
+            return
+        end
+
         local ammo = getGunAmmo(gun)
         local reserve = getGunReserve(gun)
 
@@ -1296,15 +1327,6 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
             ReloadTransport.readyAt = nil
             ReloadTransport.pendingAmmo = nil
             ReloadTransport.ackDeadline = nil
-            if evasionOn then
-                local name = scatterStep(root, now)
-                if now - lastEscapeAt > 1 then
-                    lastEscapeAt = now
-                    notify("Reloading...", 1.5)
-                end
-            else
-                desyncClear()
-            end
             return
         end
 
@@ -1315,11 +1337,6 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
                 if deadlinePassed then
                     clearReloadTransport()
                     return
-                end
-                if evasionOn then
-                    scatterStep(root, now)
-                else
-                    desyncClear()
                 end
                 return
             end
@@ -1338,21 +1355,15 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
 
         if now >= ReloadTransport.readyAt
             and (ReloadTransport.ackDeadline == nil or now >= ReloadTransport.ackDeadline) then
-            if doReload(gun) then
+            if doFullReload(gun) then
                 ReloadTransport.ackDeadline = os.clock()
                     + getEstimatedRemoteDelay()
                     + getEstimatedReplicationDelay()
                 if now - lastEscapeAt > 1 then
                     lastEscapeAt = now
-                    notify("Reload sent", 1.5)
+                    notify("Full reload sent", 1.5)
                 end
             end
-        end
-
-        if evasionOn then
-            scatterStep(root, now)
-        else
-            desyncClear()
         end
         return
     end
