@@ -24,11 +24,22 @@ _G.MinhoHub = _G.MinhoHub or {}
 local Hub = _G.MinhoHub
 Hub.BASE = BASE
 
-Hub.Library = load(BASE .. "/Minho_Hub_Obsidian_UI.lua")
+Hub.Library      = load(BASE .. "/Minho_Hub_Obsidian_UI.lua")
+Hub.ThemeManager = load(BASE .. "/ThemeManager.lua")
+Hub.SaveManager  = load(BASE .. "/SaveManager.lua")
 
 if not Hub.Library then
     warn("[loader] Library failed to load — aborting")
     return
+end
+
+if Hub.ThemeManager then Hub.ThemeManager:SetLibrary(Hub.Library) end
+if Hub.SaveManager and type(Hub.SaveManager) == "function" then
+    local ok, instance = pcall(Hub.SaveManager)
+    if ok then Hub.SaveManager = instance end
+end
+if Hub.SaveManager and Hub.SaveManager.SetLibrary then
+    Hub.SaveManager:SetLibrary(Hub.Library)
 end
 
 Hub.Window = Hub.Library:CreateWindow({
@@ -57,15 +68,12 @@ Hub.RunService        = RunService
 Hub.LocalPlayer       = LocalPlayer
 Hub.ws                = ws
 
-local Main    = Hub.Tabs.Main
+local Main     = Hub.Tabs.Main
 local Settings = Hub.Tabs.Settings
 local Library  = Hub.Library
 local Toggles  = Library.Toggles
 local Options  = Library.Options
 
---============================================================
---  레이지 코드 (메인 탭)
---============================================================
 local Config = {
     Enabled = false,
     EvasionMode = "Random",
@@ -1156,9 +1164,6 @@ RageModule._heartbeatConn = RunService.Heartbeat:Connect(function(dt)
     end
 end)
 
---============================================================
---  Main 탭 UI
---============================================================
 local RageBox = Main:AddGroupbox({ Name = "Ragebot", Side = 1, IconName = "target" })
 local RBox    = Main:AddGroupbox({ Name = "Rage", Side = 1, IconName = "zap" })
 local SCBox   = Main:AddGroupbox({ Name = "Speed Control", Side = 2, IconName = "gauge" })
@@ -1312,9 +1317,11 @@ KnifeHeavyBox:AddSlider("KnifeHeavySlider", {
 })
 KnifeHeavyBox:SetupDependencies({ { Toggles.KnifeHeavyToggle, true } })
 
---============================================================
---  Settings 탭 UI
---============================================================
+if Hub.SaveManager and Hub.SaveManager.BuildConfigSection then
+    Hub.SaveManager:BuildConfigSection(Settings, "folder-cog")
+    Hub.SaveManager:LoadAutoloadConfig()
+end
+
 local SettingsBox = Settings:AddGroupbox({ Name = "Keybinds", Side = 1 })
 
 SettingsBox:AddCheckbox("ShowKeybindsWindow", {
