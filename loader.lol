@@ -51,11 +51,7 @@ Hub.Window = Hub.Library:CreateWindow({
 
 Hub.Tabs = {
     Main      = Hub.Window:AddTab("Main", "house"),
-    World     = Hub.Window:AddTab("World", "globe"),
-    Visuals   = Hub.Window:AddTab("Visuals", "eye"),
-    Character = Hub.Window:AddTab("Character", "user"),
     Cosmetics = Hub.Window:AddTab("Cosmetics", "shirt"),
-    Misc      = Hub.Window:AddTab("Misc", "settings"),
     Settings  = Hub.Window:AddTab("Settings", "settings-2"),
 }
 
@@ -226,44 +222,4 @@ task.spawn(function()
             if shared.RagebotActive then
                 for _, v in ipairs({...}) do
                     if typeof(v) == "Instance" and v:IsA("BasePart") then
-                        local n = string.lower(v.Name)
-                        if n:find("map") or n:find("bound") or n:find("safe") then
-                            return true
-                        end
-                    end
-                end
-                return false
-            end
-            return oldPart(...)
-        end)
-    end
-
-    if hookfunction and type(Utility.IsWithinTaggedParts) == "function" then
-        local oldTagged = Utility.IsWithinTaggedParts
-        Utility.IsWithinTaggedParts = newcclosure(function(self, tag, pos, size, returnAll)
-            if shared.RagebotActive and type(tag) == "string" then
-                local lt = string.lower(tag)
-                if lt:find("map") or lt:find("bound") or lt:find("safe") then
-                    return returnAll and {workspace.Terrain} or workspace.Terrain
-                end
-                return returnAll and {} or nil
-            end
-            return oldTagged(self, tag, pos, size, returnAll)
-        end)
-    end
-end)
-
-local co = coroutine.create(function()
-    load(BASE .. "/tabs/main.lua")
-    load(BASE .. "/tabs/world.lua")
-    load(BASE .. "/tabs/visuals.lua")
-    load(BASE .. "/tabs/character.lua")
-    load(BASE .. "/tabs/cosmetics.lua")
-    load(BASE .. "/tabs/misc.lua")
-    load(BASE .. "/tabs/settings.lua")
-end)
-local ok, err = coroutine.resume(co)
-if not ok then warn("[loader] Tab loading error: " .. tostring(err)) end
-
-print("[Minho Hub] All tabs loaded")
-return true
+                        local n = string
